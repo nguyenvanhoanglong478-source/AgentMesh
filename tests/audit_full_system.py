@@ -272,10 +272,10 @@ async def run_comprehensive_audit():
         else:
             print(f"  ✓ API Web Mở (iTunes): Hoạt động xuất sắc, trả về {api_results['itunes']['count']} kết quả", flush=True)
 
-        if api_results.get("hasSpotifyClient"):
-            findings["API"].append({"severity": "MEDIUM", "issue": "window.SpotifyClient vẫn còn tồn tại trong ngữ cảnh toàn cục"})
+        if not api_results.get("hasSpotifyClient"):
+            findings["API"].append({"severity": "HIGH", "issue": "Thiếu mô-đun SpotifyClient cho tùy chọn kết nối Spotify Hybrid"})
         else:
-            print("  ✓ Tách biệt phụ thuộc: Đã loại bỏ hoàn toàn mã kết nối Spotify dư thừa", flush=True)
+            print("  ✓ Kiến trúc Hybrid: Đã tích hợp SpotifyClient an toàn với chế độ Web Mở mặc định", flush=True)
 
         # -------------------------------------------------------------
         # DOMAIN 5: TÌM KIẾM (SEARCH) AUDIT
@@ -332,13 +332,18 @@ async def run_comprehensive_audit():
         # -------------------------------------------------------------
         print("\n>>> [7/8] Đang kiểm tra Tính năng Playlist Tự tạo (Spotify Style) & An toàn dữ liệu...", flush=True)
 
-        # 1. Check Spotify modals are 0
+        # 1. Check Spotify & Device Modals exist and are square (border-radius: 0px)
         sp_modal_count = await page.locator("#spotify-modal").count()
         dev_modal_count = await page.locator("#device-modal").count()
-        if sp_modal_count > 0 or dev_modal_count > 0:
-            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Tồn dư modal Spotify ({sp_modal_count}) hoặc Device ({dev_modal_count})"})
+        if sp_modal_count == 0 or dev_modal_count == 0:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Thiếu modal Spotify ({sp_modal_count}) hoặc Device ({dev_modal_count})"})
         else:
-            print("  ✓ Dọn sạch Spotify: Không còn bất kỳ modal Spotify hoặc Device switcher nào", flush=True)
+            sp_rad = await page.locator("#spotify-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
+            dev_rad = await page.locator("#device-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
+            if sp_rad not in ["0px", "0"] or dev_rad not in ["0px", "0"]:
+                findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Spotify/Device không đạt chuẩn hình vuông (border-radius: 0px)"})
+            else:
+                print("  ✓ Modal Hybrid: Modal Spotify & Device switcher sẵn sàng, chuẩn hình vuông 100% (0px)", flush=True)
 
         # 2. Test Create Playlist Modal
         await page.locator(".js-btn-new-playlist").first.click()

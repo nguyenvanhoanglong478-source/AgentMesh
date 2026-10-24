@@ -21,12 +21,13 @@ Mở ngay trên trình duyệt mà **không cần cài đặt, không cần tài
 
 ---
 
-## 🚀 Điểm Nhấn Kiến Trúc (v2.0)
+## 🚀 Điểm Nhấn Kiến Trúc Lai (Hybrid Architecture v2.5)
 
-Khác với các ứng dụng nghe nhạc truyền thống hoặc các bản thử nghiệm phụ thuộc vào bên thứ ba:
-- **Thuần Web Mở & Tự do**: Loại bỏ hoàn toàn Spotify SDK cồng kềnh, không yêu cầu đăng nhập hay xác thực OAuth phức tạp.
-- **Tốc độ phản hồi tức thì (0ms latency)**: Toàn bộ thao tác tìm kiếm và nạp nhạc diễn ra trực tiếp qua luồng dữ liệu mở tiêu chuẩn CORS.
-- **Siêu tiết kiệm tài nguyên**: Visualizer 3D duy nhất được thiết kế để chỉ tiêu thụ `<0.25ms CPU/frame`, duy trì tốc độ khung hình 120–144 FPS mượt mà ngay cả trên thiết bị di động tầm trung.
+OpenMusic được kiến trúc theo mô hình **Lai (Hybrid Audio Engine)** thông minh, linh hoạt đáp ứng mọi nhu cầu nghe nhạc:
+- **Mặc định Tự do (Free Web Mode)**: Mở là phát ngay lập tức (0ms latency), không cần đăng nhập, không quảng cáo, truy cập kho nhạc 100M+ bài hát toàn cầu, tự động phát lặp liên tục và tải tệp nhạc từ máy tính/điện thoại.
+- **Tùy chọn Kết nối Spotify (Spotify Connect & Web Playback SDK)**: Dành cho người dùng muốn nghe bài hát bản quyền 100% nguyên vẹn với chất lượng Hi-Fi 320kbps, đồng bộ danh mục Yêu thích (lên tới 10.000 bài) và điều khiển phát nhạc đa thiết bị (Spotify Connect).
+- **Bảo mật Tuyệt đối (Zero-Retention PKCE)**: Kết nối Spotify theo chuẩn OAuth 2.0 PKCE + Anti-CSRF, phiên làm việc chỉ lưu tạm trong bộ nhớ RAM, tuyệt đối không ghi mật khẩu hay mã truy cập vào ổ đĩa.
+- **Siêu tiết kiệm tài nguyên**: Visualizer 3D duy nhất được thiết kế để chỉ tiêu thụ `<0.28ms CPU/frame`, duy trì tốc độ khung hình 120–144 FPS mượt mà ngay cả trên thiết bị di động tầm trung.
 
 ---
 

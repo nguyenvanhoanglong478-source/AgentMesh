@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <style>
+    <style>
 :root {
   --ink: #0E0D0B;
   --ink-elev: #161411;
@@ -1115,17 +1115,22 @@ html, body {
           <span class="status-dot"></span>
           <span>OpenMusic</span>
         </div>
-        
+        <span class="mono dim truncate js-user-status" style="max-width:140px">Web Mở</span>
       </div>
 
       <div class="top-center">
-        <span class="mono dim" style="letter-spacing:0.08em">🌐 THƯ VIỆN NHẠC WEB MỞ · MIỄN PHÍ TOÀN CẦU</span>
+        <span class="mono dim">Đầu ra:</span>
+        <button class="word mono js-open-devices" type="button" title="Chọn thiết bị phát qua Spotify Connect / Trình phát Web">
+          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · OpenMusic</span>
+        </button>
       </div>
 
       <div class="top-right">
         <button class="word mono js-toggle-theme" type="button" title="Chuyển chế độ Sáng / Tối" aria-label="Đổi giao diện">
           <span class="js-theme-label">Sáng</span>
         </button>
+        <button class="word mono js-open-devices" type="button" title="Danh sách thiết bị phát">Thiết bị</button>
+        <button class="word mono js-open-spotify" type="button" title="Kết nối tài khoản Spotify">Spotify</button>
         <button id="btn-top-new-playlist" class="word mono on js-btn-new-playlist" type="button" title="Tạo danh sách phát mới">+ Tạo Playlist</button>
       </div>
     </header>
@@ -1158,7 +1163,10 @@ html, body {
           placeholder="Tìm bài hát, nghệ sĩ, album trên toàn cầu..."
           autocomplete="off"
         />
-
+        <div class="search-source-bar">
+          <button id="src-pill-open" class="word mono on" type="button" title="Tìm trong 100M+ bài hát Web Mở miễn phí">🌐 Web Mở</button>
+          <button id="src-pill-spotify" class="word mono" type="button" title="Tìm trong danh mục bài hát Spotify">🟢 Spotify</button>
+        </div>
       </div>
 
       <div id="track-list" class="track-list" role="list"></div>
@@ -1374,7 +1382,62 @@ html, body {
     </div>
   </div>
 
-  <!-- TOAST -->
+<!-- MODAL 1: SPOTIFY ZERO-RETENTION OAUTH PKCE CONNECTION -->
+  <div id="spotify-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sp-modal-title">
+      <div class="modal-hdr">
+        <h2 id="sp-modal-title" class="modal-title">Kết nối tài khoản Spotify</h2>
+        <button class="word mono js-close-spotify" type="button">Đóng</button>
+      </div>
+
+      <div style="padding:8px 10px;border:1px solid var(--line);border-radius:0;font-size:11.5px;line-height:1.45" class="dim">
+        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> OpenMusic kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">
+        <div>1. Mở <strong>developer.spotify.com/dashboard</strong> → chọn ứng dụng của bạn → mục <strong>Redirect URIs</strong> thêm địa chỉ:</div>
+        <div id="sp-redirect-uri" class="mono acc" style="padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:0;user-select:all;-webkit-user-select:all"></div>
+        <div>2. Dán mã <strong>Spotify Client ID</strong> vào ô dưới đây và bấm <strong>Đăng nhập Spotify</strong>:</div>
+      </div>
+
+      <div>
+        <label class="mono dim" for="sp-client-id" style="display:block;margin-bottom:5px">Spotify Client ID</label>
+        <input
+          id="sp-client-id"
+          class="field-input"
+          type="text"
+          placeholder="Dán Spotify Client ID (32 ký tự)..."
+          autocomplete="off"
+        />
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <button id="btn-logout-spotify" class="btn-outline" type="button">Ngắt kết nối / Xóa phiên</button>
+        <div style="display:flex;gap:8px">
+          <button id="btn-save-client-id" class="btn-outline" type="button">Giữ tạm ID</button>
+          <button id="btn-connect-spotify" class="btn-solid" type="button">Đăng nhập Spotify</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: SPOTIFY CONNECT DEVICE SWITCHER -->
+  <div id="device-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title">
+      <div class="modal-hdr">
+        <h2 id="dev-modal-title" class="modal-title">Thiết bị phát (Điện thoại &amp; Laptop)</h2>
+        <button class="word mono js-close-devices" type="button">Đóng</button>
+      </div>
+
+      <p class="dim" style="font-size:12px;line-height:1.45">
+        Chọn thiết bị đầu ra âm thanh qua giao thức Spotify Connect.
+      </p>
+
+      <div id="device-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+
+    <!-- TOAST -->
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -1577,6 +1640,862 @@ if (typeof window !== 'undefined') {
 // 2. Track-matched real audio preview & Spotify segment analysis (Auto Mode when Spotify is active)
 // 3. System / Tab Audio Loopback capture (getDisplayMedia audio)
 // 4. Raw Unfiltered Microphone capture (getUserMedia with AGC/NoiseSuppression disabled)
+
+// ===== SPOTIFY HYBRID CLIENT (PKCE OAUTH 2.0 + WEB PLAYBACK SDK + SPOTIFY CONNECT) =====
+const SpotifyClient = (function () {
+  const LS_CLIENT_ID = 'vang_spotify_client_id';
+  const SS_TOKEN = 'vang_spotify_session_token';
+  const SS_VERIFIER = 'vang_pkce_verifier';
+  const SS_STATE = 'vang_pkce_state';
+  const SS_TEMP_CID = 'vang_pkce_cid';
+
+  // Least-privilege scopes (no user-read-email)
+  const SCOPES = [
+    'streaming',
+    'user-read-private',
+    'user-read-playback-state',
+    'user-modify-playback-state',
+    'user-read-currently-playing',
+    'user-library-read',
+    'user-read-recently-played',
+    'user-top-read',
+    'playlist-read-private',
+    'playlist-read-collaborative'
+  ].join(' ');
+
+  let memoryToken = null;
+  let memoryClientId = '';
+  let sdkPlayer = null;
+  let webDeviceId = null;
+
+  // Migrate any existing active session into sessionStorage so page refresh doesn't break audio playback
+  try {
+    const existing = sessionStorage.getItem(SS_TOKEN) || localStorage.getItem('vang_spotify_token');
+    if (existing) {
+      memoryToken = JSON.parse(existing);
+      sessionStorage.setItem(SS_TOKEN, existing);
+      localStorage.removeItem('vang_spotify_token');
+    }
+    const existingCid = sessionStorage.getItem(SS_TEMP_CID) || localStorage.getItem(LS_CLIENT_ID);
+    if (existingCid) {
+      memoryClientId = existingCid.trim();
+      sessionStorage.setItem(SS_TEMP_CID, memoryClientId);
+    }
+  } catch (e) {}
+
+  function getClientId() {
+    if (memoryClientId) return memoryClientId;
+    try {
+      return (sessionStorage.getItem(SS_TEMP_CID) || localStorage.getItem(LS_CLIENT_ID) || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function setClientId(id) {
+    memoryClientId = (id || '').trim();
+    try {
+      if (memoryClientId) {
+        sessionStorage.setItem(SS_TEMP_CID, memoryClientId);
+      } else {
+        sessionStorage.removeItem(SS_TEMP_CID);
+      }
+      localStorage.removeItem(LS_CLIENT_ID);
+    } catch (e) {}
+  }
+
+  function getRedirectUri() {
+    return window.location.origin + window.location.pathname;
+  }
+
+  function saveTokenInMemory(res) {
+    const prev = memoryToken || {};
+    memoryToken = {
+      access_token: res.access_token,
+      refresh_token: res.refresh_token || prev.refresh_token || null,
+      expires_at: Date.now() + (res.expires_in || 3600) * 1000 - 60000
+    };
+    try {
+      sessionStorage.setItem(SS_TOKEN, JSON.stringify(memoryToken));
+    } catch (e) {}
+    return memoryToken;
+  }
+
+  function logout() {
+    memoryToken = null;
+    try {
+      sessionStorage.removeItem(SS_TOKEN);
+      sessionStorage.removeItem(SS_VERIFIER);
+      sessionStorage.removeItem(SS_STATE);
+      localStorage.removeItem('vang_spotify_token');
+      localStorage.removeItem('vang_spotify_verifier');
+    } catch (e) {}
+    if (sdkPlayer) {
+      try { sdkPlayer.disconnect(); } catch (e) {}
+      sdkPlayer = null;
+    }
+    webDeviceId = null;
+  }
+
+  // Cryptographic random generator for PKCE & anti-CSRF state
+  function randomString(len) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    const arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, x => chars[x % chars.length]).join('');
+  }
+
+  async function sha256Base64Url(plain) {
+    const data = new TextEncoder().encode(plain);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    const bytes = new Uint8Array(digest);
+    let bin = '';
+    bytes.forEach(b => (bin += String.fromCharCode(b)));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function startLogin(customClientId) {
+    if (customClientId !== undefined) setClientId(customClientId);
+    const clientId = getClientId();
+    if (!clientId) {
+      throw new Error('Vui lòng nhập Spotify Client ID để kết nối.');
+    }
+    const verifier = randomString(64);
+    const state = randomString(32);
+    try {
+      sessionStorage.setItem(SS_VERIFIER, verifier);
+      sessionStorage.setItem(SS_STATE, state);
+      sessionStorage.setItem(SS_TEMP_CID, clientId);
+    } catch (e) {}
+
+    const challenge = await sha256Base64Url(verifier);
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: getRedirectUri(),
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      state,
+      scope: SCOPES
+    });
+    window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+  }
+
+  async function handleCallbackIfPresent() {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const returnedState = url.searchParams.get('state');
+    const error = url.searchParams.get('error');
+
+    // Immediately clean URL bar so code/state never leak into history or referer
+    if (code || error || returnedState) {
+      window.history.replaceState({}, document.title, getRedirectUri());
+    }
+
+    if (error) {
+      throw new Error('Spotify từ chối kết nối: ' + error);
+    }
+    if (!code) return false;
+
+    let verifier = null;
+    let expectedState = null;
+    try {
+      verifier = sessionStorage.getItem(SS_VERIFIER);
+      expectedState = sessionStorage.getItem(SS_STATE);
+      sessionStorage.removeItem(SS_VERIFIER);
+      sessionStorage.removeItem(SS_STATE);
+    } catch (e) {}
+
+    if (expectedState && returnedState !== expectedState) {
+      logout();
+      throw new Error('Phát hiện mã trạng thái OAuth không khớp (CSRF protection). Đã hủy kết nối.');
+    }
+
+    const clientId = getClientId();
+    if (!verifier || !clientId) return false;
+
+    const body = new URLSearchParams({
+      client_id: clientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: getRedirectUri(),
+      code_verifier: verifier
+    });
+
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+    if (!resp.ok) {
+      throw new Error('Không thể xác thực phiên đăng nhập Spotify.');
+    }
+    const json = await resp.json();
+    saveTokenInMemory(json);
+    return true;
+  }
+
+  async function ensureValidToken() {
+    if (!memoryToken || !memoryToken.access_token) return null;
+    if (Date.now() < memoryToken.expires_at) return memoryToken.access_token;
+
+    if (!memoryToken.refresh_token || !getClientId()) {
+      logout();
+      return null;
+    }
+
+    try {
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: memoryToken.refresh_token,
+        client_id: getClientId()
+      });
+      const resp = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      if (!resp.ok) {
+        logout();
+        return null;
+      }
+      const json = await resp.json();
+      return saveTokenInMemory(json).access_token;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function api(path, options = {}) {
+    const token = await ensureValidToken();
+    if (!token) throw new Error('Chưa kết nối Spotify');
+    const resp = await fetch('https://api.spotify.com/v1' + path, {
+      ...options,
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    if (resp.status === 204) return null;
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(`Spotify API (${resp.status}): ${txt.slice(0, 80)}`);
+    }
+    return resp.json().catch(() => null);
+  }
+
+  function extractCoverColor(imgUrl) {
+    return new Promise(resolve => {
+      if (!imgUrl || !imgUrl.startsWith('https://')) return resolve([217, 130, 43]);
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = 24;
+          cv.height = 24;
+          const c = cv.getContext('2d');
+          c.drawImage(img, 0, 0, 24, 24);
+          const d = c.getImageData(0, 0, 24, 24).data;
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const br = (d[i] + d[i + 1] + d[i + 2]) / 3;
+            if (br > 38 && br < 235) {
+              r += d[i];
+              g += d[i + 1];
+              b += d[i + 2];
+              count++;
+            }
+          }
+          if (count > 0) {
+            resolve([Math.round(r / count), Math.round(g / count), Math.round(b / count)]);
+          } else {
+            resolve([217, 130, 43]);
+          }
+        } catch (e) {
+          resolve([217, 130, 43]);
+        }
+      };
+      img.onerror = () => resolve([217, 130, 43]);
+      img.src = imgUrl;
+    });
+  }
+
+  function mapSpotifyTrack(item, fallbackAlbum = null) {
+    const t = item && (item.track || item.item) ? (item.track || item.item) : item;
+    if (!t || (!t.id && !t.uri && !t.name)) return null;
+    if (t.type && t.type !== 'track') return null;
+    const albumObj = t.album || fallbackAlbum || {};
+    const rawImg =
+      (albumObj.images && albumObj.images[0] && albumObj.images[0].url) ||
+      (t.images && t.images[0] && t.images[0].url) ||
+      '';
+    const safeCover = rawImg.startsWith('https://') ? rawImg : '';
+    const id = t.id || t.uri || `${t.name}_${Date.now()}`;
+    return {
+      id,
+      uri: t.uri || (t.id ? `spotify:track:${t.id}` : ''),
+      t: String(t.name || 'Không rõ tên'),
+      a: (t.artists || []).map(x => x && x.name).filter(Boolean).join(', ') || (fallbackAlbum && fallbackAlbum.artistName) || 'Nghệ sĩ',
+      al: String(albumObj.name || 'Spotify'),
+      albumId: albumObj.id || '',
+      albumUri: albumObj.uri || (albumObj.id ? `spotify:album:${albumObj.id}` : ''),
+      d: Math.max(1, Math.round((t.duration_ms || 180000) / 1000)),
+      cover: safeCover,
+      c: [217, 130, 43],
+      bpm: 116,
+      liked: true
+    };
+  }
+
+  function dedupeTracks(list) {
+    const seen = new Set();
+    const out = [];
+    for (const tr of list) {
+      if (!tr) continue;
+      const key = tr.id || tr.uri || `${tr.t}__${tr.a}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(tr);
+      }
+    }
+    return out;
+  }
+
+  async function fetchProfile() {
+    return api('/me');
+  }
+
+  async function fetchLikedTracks(maxItems = 10000, onProgress = null) {
+    const all = [];
+    let offset = 0;
+    const limit = 50;
+    while (offset < maxItems) {
+      const data = await api(`/me/tracks?market=from_token&limit=${limit}&offset=${offset}`).catch(() => null);
+      const items = (data && data.items) || [];
+      if (!items.length) break;
+      const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
+      all.push(...mapped);
+      if (onProgress) onProgress(all.slice());
+      if (!data.next || items.length < limit) break;
+      offset += limit;
+    }
+    return dedupeTracks(all);
+  }
+
+  async function fetchNewReleases(limit = 50) {
+    const data = await api(`/browse/new-releases?limit=${limit}`).catch(() =>
+      api(`/browse/new-releases?country=VN&limit=${limit}`).catch(() => null)
+    );
+    const items = (data && data.albums && data.albums.items) || [];
+    return items.map(alb => {
+      if (!alb || !alb.id) return null;
+      const rawCover = (alb.images && alb.images[0] && alb.images[0].url) || '';
+      return {
+        id: alb.id,
+        uri: alb.uri || `spotify:album:${alb.id}`,
+        kind: 'album',
+        source: 'spotify',
+        name: alb.name || 'Album mới',
+        artist: (alb.artists || []).map(a => a && a.name).filter(Boolean).join(', ') || 'Nghệ sĩ',
+        count: alb.total_tracks || 0,
+        cover: rawCover.startsWith('https://') ? rawCover : ''
+      };
+    }).filter(Boolean);
+  }
+
+  async function fetchFeaturedPlaylists(limit = 50) {
+    const data = await api(`/browse/featured-playlists?limit=${limit}`).catch(() => null);
+    const items = (data && data.playlists && data.playlists.items) || [];
+    return items.map(p => {
+      if (!p || !p.id) return null;
+      const rawCover = (p.images && p.images[0] && p.images[0].url) || '';
+      return {
+        id: p.id,
+        uri: p.uri || `spotify:playlist:${p.id}`,
+        kind: 'playlist',
+        source: 'spotify',
+        name: p.name || 'Tuyển tập nổi bật',
+        artist: (p.owner && p.owner.display_name) || 'Spotify',
+        count: (p.tracks && p.tracks.total) || (p.items && p.items.total) || 0,
+        cover: rawCover.startsWith('https://') ? rawCover : ''
+      };
+    }).filter(Boolean);
+  }
+
+  async function fetchTopTracks() {
+    const [shortData, medData] = await Promise.all([
+      api('/me/top/tracks?limit=50&time_range=short_term').catch(() => null),
+      api('/me/top/tracks?limit=50&time_range=medium_term').catch(() => null)
+    ]);
+    const list = [
+      ...(((shortData && shortData.items) || []).map(it => mapSpotifyTrack(it))),
+      ...(((medData && medData.items) || []).map(it => mapSpotifyTrack(it)))
+    ].filter(Boolean);
+    return dedupeTracks(list);
+  }
+
+  // Fetch Saved Albums + embedded tracklists so albums in "Tuyển tập" open instantaneously!
+  async function fetchSavedAlbums() {
+    const data = await api('/me/albums?market=from_token&limit=50').catch(() => null);
+    const items = (data && data.items) || [];
+    const albums = [];
+    const allAlbumTracks = [];
+
+    for (const it of items) {
+      const alb = it && it.album;
+      if (!alb || !alb.id) continue;
+      const cover = (alb.images && alb.images[0] && alb.images[0].url) || '';
+      const artistName = (alb.artists || []).map(a => a && a.name).filter(Boolean).join(', ');
+      const fallbackMeta = { name: alb.name, images: alb.images, artistName };
+      const tracks = ((alb.tracks && alb.tracks.items) || [])
+        .map(tr => mapSpotifyTrack(tr, fallbackMeta))
+        .filter(Boolean);
+
+      allAlbumTracks.push(...tracks);
+      albums.push({
+        id: alb.id,
+        uri: alb.uri || `spotify:album:${alb.id}`,
+        kind: 'album',
+        name: alb.name || 'Album',
+        artist: artistName,
+        count: (alb.total_tracks || tracks.length || 0),
+        cover: cover.startsWith('https://') ? cover : '',
+        preloadedTracks: tracks
+      });
+    }
+    return { albums, tracks: dedupeTracks(allAlbumTracks) };
+  }
+
+  async function fetchSavedAlbumTracks() {
+    const res = await fetchSavedAlbums();
+    return res.tracks;
+  }
+
+  async function fetchRecentTracks() {
+    const data = await api('/me/player/recently-played?limit=50');
+    const list = ((data && data.items) || []).map(it => mapSpotifyTrack(it.track)).filter(Boolean);
+    return dedupeTracks(list);
+  }
+
+  async function fetchCurrentQueue() {
+    const [curPlayback, queueData] = await Promise.all([
+      api('/me/player?market=from_token').catch(() => null),
+      api('/me/player/queue').catch(() => null)
+    ]);
+    const list = [];
+    if (curPlayback && curPlayback.item) {
+      const cur = mapSpotifyTrack(curPlayback.item);
+      if (cur) list.push(cur);
+    }
+    if (queueData && queueData.currently_playing) {
+      const curQ = mapSpotifyTrack(queueData.currently_playing);
+      if (curQ) list.push(curQ);
+    }
+    if (queueData && Array.isArray(queueData.queue)) {
+      for (const qItem of queueData.queue) {
+        const m = mapSpotifyTrack(qItem);
+        if (m) list.push(m);
+      }
+    }
+    return {
+      playback: curPlayback,
+      tracks: dedupeTracks(list)
+    };
+  }
+
+  async function fetchCurrentPlayback() {
+    return api('/me/player?market=from_token').catch(() => null);
+  }
+
+  async function fetchAudioAnalysis(trackId) {
+    if (!trackId) return null;
+    return api(`/audio-analysis/${encodeURIComponent(trackId)}`).catch(() => null);
+  }
+
+  // Fetch both User Playlists AND Saved Albums for the "Tuyển tập" tab
+  async function fetchPlaylists(maxItems = 200) {
+    const all = [];
+    let offset = 0;
+    const limit = 50;
+    while (offset < maxItems) {
+      const data = await api(`/me/playlists?limit=${limit}&offset=${offset}`);
+      const items = (data && data.items) || [];
+      if (!items.length) break;
+      for (const p of items) {
+        if (!p || !p.id) continue;
+        const rawCover = (p.images && p.images[0] && p.images[0].url) || '';
+        all.push({
+          id: p.id,
+          uri: p.uri || `spotify:playlist:${p.id}`,
+          kind: 'playlist',
+          name: p.name || 'Tuyển tập',
+          artist: (p.owner && p.owner.display_name) || 'Playlist',
+          count: (p.tracks && p.tracks.total) || (p.items && p.items.total) || 0,
+          cover: rawCover.startsWith('https://') ? rawCover : ''
+        });
+      }
+      if (!data.next || items.length < limit) break;
+      offset += limit;
+    }
+
+    // Also append Saved Albums so users can click any Album or Playlist in "Tuyển tập"
+    try {
+      const { albums } = await fetchSavedAlbums();
+      for (const alb of albums) {
+        all.push(alb);
+      }
+    } catch (e) {}
+
+    return all;
+  }
+
+  // Robustly fetch tracks for any Playlist OR Album
+  async function fetchPlaylistTracks(collectionId, maxItems = 500, onProgress = null, kind = 'playlist', preloaded = null, collectionName = '') {
+    if (Array.isArray(preloaded) && preloaded.length > 0) {
+      if (onProgress) onProgress(preloaded.slice());
+      // If it's a Spotify album with only 1-2 library tracks preloaded, try fetching the full album tracklist
+      if (kind === 'album' && collectionId && !String(collectionId).startsWith('lib-alb-') && !String(collectionId).startsWith('pl-') && preloaded.length < 3) {
+        try {
+          const albData = await api(`/albums/${encodeURIComponent(collectionId)}`).catch(() => null);
+          if (albData && albData.tracks && albData.tracks.items && albData.tracks.items.length > preloaded.length) {
+            const fallbackMeta = {
+              name: albData.name,
+              images: albData.images,
+              artistName: (albData.artists || []).map(a => a && a.name).filter(Boolean).join(', ')
+            };
+            const fullMapped = albData.tracks.items.map(tr => mapSpotifyTrack(tr, fallbackMeta)).filter(Boolean);
+            if (fullMapped.length) {
+              if (onProgress) onProgress(fullMapped);
+              return dedupeTracks(fullMapped);
+            }
+          }
+        } catch (e) {}
+      }
+      return preloaded.slice();
+    }
+
+    // 1. If it's an Album, fetch /albums/{id} & /albums/{id}/tracks
+    if (kind === 'album' && collectionId && !String(collectionId).startsWith('lib-alb-')) {
+      const albData = await api(`/albums/${encodeURIComponent(collectionId)}`).catch(() =>
+        api(`/albums/${encodeURIComponent(collectionId)}?market=from_token`).catch(() => null)
+      );
+      if (albData) {
+        const fallbackMeta = {
+          name: albData.name,
+          images: albData.images,
+          artistName: (albData.artists || []).map(a => a && a.name).filter(Boolean).join(', ')
+        };
+        const items = (albData.tracks && albData.tracks.items) || [];
+        const mapped = items.map(tr => mapSpotifyTrack(tr, fallbackMeta)).filter(Boolean);
+        if (onProgress && mapped.length) onProgress(mapped);
+        if (mapped.length) return dedupeTracks(mapped);
+      }
+      const albTracksData = await api(`/albums/${encodeURIComponent(collectionId)}/tracks?limit=50`).catch(() => null);
+      if (albTracksData && albTracksData.items) {
+        const mapped = albTracksData.items.map(tr => mapSpotifyTrack(tr)).filter(Boolean);
+        if (onProgress && mapped.length) onProgress(mapped);
+        if (mapped.length) return dedupeTracks(mapped);
+      }
+    }
+
+    // 2. Try paginated /playlists/{id}/tracks (first without market param, then with market=from_token)
+    const all = [];
+    let offset = 0;
+    const limit = 100;
+    try {
+      while (offset < maxItems) {
+        let data = await api(`/playlists/${encodeURIComponent(collectionId)}/tracks?limit=${limit}&offset=${offset}`).catch(() => null);
+        if (!data) {
+          data = await api(`/playlists/${encodeURIComponent(collectionId)}/tracks?market=from_token&limit=${limit}&offset=${offset}`).catch(() => null);
+        }
+        const items = (data && (data.items || (data.tracks && data.tracks.items))) || [];
+        if (!items.length) break;
+        const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
+        all.push(...mapped);
+        if (onProgress && all.length) onProgress(all.slice());
+        if (!data.next || items.length < limit) break;
+        offset += limit;
+      }
+    } catch (e) {}
+
+    if (all.length > 0) return dedupeTracks(all);
+
+    // 3. Fallback: GET /playlists/{id}
+    try {
+      const fullPl = await api(`/playlists/${encodeURIComponent(collectionId)}`).catch(() =>
+        api(`/playlists/${encodeURIComponent(collectionId)}?market=from_token`).catch(() => null)
+      );
+      const items =
+        (fullPl && fullPl.tracks && fullPl.tracks.items) ||
+        (fullPl && fullPl.items && fullPl.items.items) ||
+        [];
+      const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
+      if (onProgress && mapped.length) onProgress(mapped);
+      if (mapped.length > 0) return dedupeTracks(mapped);
+    } catch (e) {}
+
+    // 4. Fallback: maybe collectionId is an album ID
+    try {
+      const albData = await api(`/albums/${encodeURIComponent(collectionId)}`);
+      if (albData && albData.tracks && albData.tracks.items) {
+        const fallbackMeta = {
+          name: albData.name,
+          images: albData.images,
+          artistName: (albData.artists || []).map(a => a && a.name).filter(Boolean).join(', ')
+        };
+        const mapped = albData.tracks.items.map(tr => mapSpotifyTrack(tr, fallbackMeta)).filter(Boolean);
+        if (onProgress && mapped.length) onProgress(mapped);
+        if (mapped.length > 0) return dedupeTracks(mapped);
+      }
+    } catch (e) {}
+
+    // 5. Fallback for Spotify Dev Mode restricted editorial/algorithmic playlists (e.g. Daily Mix / Top 50):
+    // Search tracks matching the collection name so the playlist always opens and plays!
+    if (collectionName && String(collectionName).trim()) {
+      try {
+        const searched = await searchTracks(String(collectionName).trim(), 0);
+        if (searched && searched.length > 0) {
+          if (onProgress) onProgress(searched);
+          return dedupeTracks(searched);
+        }
+      } catch (e) {}
+    }
+
+    return [];
+  }
+
+  // Helper to execute play request reliably across Web Playback SDK or active Connect devices
+  async function executePlayPayload(payload, preferredDeviceId = null) {
+    if (sdkPlayer && typeof sdkPlayer.activateElement === 'function') {
+      try { await sdkPlayer.activateElement(); } catch (e) {}
+    }
+    const targetId = preferredDeviceId || webDeviceId;
+    const q = targetId ? `?device_id=${encodeURIComponent(targetId)}` : '';
+    try {
+      await api('/me/player/play' + q, {
+        method: 'PUT',
+        body: payload ? JSON.stringify(payload) : undefined
+      });
+      return true;
+    } catch (err) {
+      // Fallback 1: Try without device_id (uses currently active Spotify device on PC/Phone)
+      if (targetId) {
+        try {
+          await api('/me/player/play', {
+            method: 'PUT',
+            body: payload ? JSON.stringify(payload) : undefined
+          });
+          return true;
+        } catch (err2) {}
+      }
+      // Fallback 2: Discover available devices and play on the first available one
+      try {
+        const devs = await fetchDevices();
+        const dev = devs.find(d => d.is_active) || devs[0];
+        if (dev && dev.id) {
+          await api(`/me/player/play?device_id=${encodeURIComponent(dev.id)}`, {
+            method: 'PUT',
+            body: payload ? JSON.stringify(payload) : undefined
+          });
+          return true;
+        }
+      } catch (err3) {}
+
+      // Fallback 3: Ensure AudioEngine's direct audio output is audible
+      if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+        window.AudioEngine.setSpotifyDeviceAudible(false);
+      }
+      return false;
+    }
+  }
+
+  async function playContextUri(contextUri, offsetIndex = 0, deviceId = null, positionMs = 0) {
+    const payload = {
+      context_uri: contextUri,
+      offset: { position: offsetIndex }
+    };
+    if (typeof positionMs === 'number') {
+      payload.position_ms = Math.max(0, Math.round(positionMs));
+    }
+    return executePlayPayload(payload, deviceId);
+  }
+
+  async function searchTracks(query, offset = 0) {
+    if (!query.trim()) return [];
+    const q = encodeURIComponent(query.trim());
+    const data = await api(`/search?type=track&market=from_token&limit=50&offset=${offset}&q=${q}`);
+    return ((data && data.tracks && data.tracks.items) || []).map(it => mapSpotifyTrack(it)).filter(Boolean);
+  }
+
+  async function fetchDevices() {
+    const data = await api('/me/player/devices');
+    return (data && data.devices) || [];
+  }
+
+  async function transferPlayback(deviceId, play = true) {
+    return api('/me/player', {
+      method: 'PUT',
+      body: JSON.stringify({ device_ids: [deviceId], play })
+    });
+  }
+
+  async function playUris(uris, offsetIndex = 0, deviceId = null, positionMs = 0) {
+    const payload = {
+      uris,
+      offset: { position: offsetIndex }
+    };
+    if (typeof positionMs === 'number') {
+      payload.position_ms = Math.max(0, Math.round(positionMs));
+    }
+    return executePlayPayload(payload, deviceId);
+  }
+
+  async function pausePlayback() {
+    if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+      window.AudioEngine.setSpotifyDeviceAudible(false);
+    }
+    if (sdkPlayer && typeof sdkPlayer.pause === 'function' && webDeviceId) {
+      try { await sdkPlayer.pause(); } catch (e) {}
+    }
+    return api('/me/player/pause', { method: 'PUT' }).catch(() => null);
+  }
+
+  async function resumePlayback(fallbackUris = null, fallbackOffset = 0, positionMs = 0) {
+    const ok = await executePlayPayload(null, webDeviceId);
+    if (!ok && Array.isArray(fallbackUris) && fallbackUris.length > 0) {
+      return executePlayPayload(
+        {
+          uris: fallbackUris,
+          offset: { position: fallbackOffset },
+          position_ms: Math.max(0, Math.round(positionMs || 0))
+        },
+        webDeviceId
+      );
+    }
+    return ok;
+  }
+
+  async function nextTrack() {
+    return api('/me/player/next', { method: 'POST' });
+  }
+
+  async function prevTrack() {
+    return api('/me/player/previous', { method: 'POST' });
+  }
+
+  async function seekPosition(sec) {
+    return api(`/me/player/seek?position_ms=${Math.round(sec * 1000)}`, { method: 'PUT' });
+  }
+
+  async function setRemoteVolume(pct) {
+    if (sdkPlayer && typeof sdkPlayer.setVolume === 'function') {
+      try { sdkPlayer.setVolume(Math.max(0, Math.min(1, pct / 100))); } catch (e) {}
+    }
+    return api(`/me/player/volume?volume_percent=${Math.round(pct)}`, { method: 'PUT' });
+  }
+
+  function initWebPlaybackSDK(onStateChange, onReadyDevice) {
+    ensureValidToken().then(token => {
+      if (!token) return;
+      const setupPlayer = () => {
+        if (!window.Spotify || sdkPlayer) return;
+        sdkPlayer = new window.Spotify.Player({
+          name: 'OpenMusic · 3D Audio Player',
+          getOAuthToken: cb => {
+            ensureValidToken().then(t => cb(t || ''));
+          },
+          volume: 0.78
+        });
+        sdkPlayer.addListener('ready', ({ device_id }) => {
+          webDeviceId = device_id;
+          if (onReadyDevice) onReadyDevice(device_id);
+        });
+        sdkPlayer.addListener('not_ready', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('initialization_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('account_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('playback_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('player_state_changed', st => {
+          const isSdkActivelyPlaying = Boolean(
+            st && !st.paused && st.track_window && st.track_window.current_track
+          );
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(isSdkActivelyPlaying);
+          }
+          if (st && onStateChange) onStateChange(st);
+        });
+        sdkPlayer.connect();
+      };
+
+      window.onSpotifyWebPlaybackSDKReady = setupPlayer;
+      if (window.Spotify) {
+        setupPlayer();
+      } else if (!document.getElementById('spotify-sdk-script')) {
+        const s = document.createElement('script');
+        s.id = 'spotify-sdk-script';
+        s.src = 'https://sdk.scdn.co/spotify-player.js';
+        s.async = true;
+        document.body.appendChild(s);
+      }
+    });
+  }
+
+  return {
+    getClientId,
+    setClientId,
+    getRedirectUri,
+    hasToken: () => !!(memoryToken && memoryToken.access_token),
+    startLogin,
+    handleCallbackIfPresent,
+    logout,
+    extractCoverColor,
+    fetchProfile,
+    fetchLikedTracks,
+    fetchTopTracks,
+    fetchNewReleases,
+    fetchFeaturedPlaylists,
+    fetchSavedAlbums,
+    fetchSavedAlbumTracks,
+    fetchRecentTracks,
+    fetchCurrentQueue,
+    fetchCurrentPlayback,
+    fetchAudioAnalysis,
+    fetchPlaylists,
+    fetchPlaylistTracks,
+    playContextUri,
+    searchTracks,
+    mapSpotifyTrack,
+    fetchDevices,
+    transferPlayback,
+    playUris,
+    pausePlayback,
+    resumePlayback,
+    nextTrack,
+    prevTrack,
+    seekPosition,
+    setRemoteVolume,
+    initWebPlaybackSDK,
+    getWebDeviceId: () => webDeviceId
+  };
+})();
+window.SpotifyClient = SpotifyClient;
 
 const AudioEngine = (function () {
   let ctx = null;
@@ -1816,7 +2735,24 @@ const AudioEngine = (function () {
     } catch (e) {}
   }
 
-  function setSpotifyDeviceAudible() {}
+  function isTrackAudibleViaRefAudio(tr) {
+    if (!tr) return false;
+    if (tr.localUrl) return true;
+    if (tr.source === 'open' || tr.isOpenSource || (tr.id && String(tr.id).startsWith('open-'))) return true;
+    if (!window.AppState || !window.AppState.spotifyActive || !tr.uri || !tr.uri.startsWith('spotify:')) {
+      return Boolean(tr.previewUrl);
+    }
+    return false;
+  }
+
+  function setSpotifyDeviceAudible(isAudible) {
+    spotifyDeviceAudible = !!isAudible;
+    if (refAudibleGain && ctx) {
+      const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
+      const shouldBeAudible = isTrackAudibleViaRefAudio(tr);
+      refAudibleGain.gain.setValueAtTime(shouldBeAudible ? 1.0 : 0.0, ctx.currentTime);
+    }
+  }
 
   function setReferencePlaying(isPlaying) {
     if (isPlaying) {
@@ -3135,7 +4071,7 @@ function renderTrackList() {
       : `background:${tr.g || "linear-gradient(135deg,#D9822B,#2A2420)"}`;
     const sourceBadge = (tr.source === "open" || tr.isOpenSource || (tr.id && String(tr.id).startsWith("open-")))
       ? '<span class="mono acc" style="font-size:8.5px;padding:0 2px;border:1px solid rgba(var(--acc-rgb),0.35);margin-right:4px">WEB</span>'
-      : (tr.localUrl ? '<span class="mono dim" style="font-size:8.5px;padding:0 2px;border:1px solid var(--line);margin-right:4px">MÁY</span>' : "");
+      : (tr.localUrl ? '<span class="mono dim" style="font-size:8.5px;padding:0 2px;border:1px solid var(--line);margin-right:4px">MÁY</span>' : (tr.uri && tr.uri.startsWith('spotify:') ? '<span class="mono acc" style="font-size:8.5px;padding:0 2px;border:1px solid rgba(30,215,96,0.35);margin-right:4px;color:#1ed760">SPOTIFY</span>' : ''));
 
     return '' +
       '<div class="qrow' + (isCur ? " cur" : "") + '" data-idx="' + i + '" style="grid-template-columns:22px 34px 1fr 42px 64px;gap:8px">' +
@@ -3245,6 +4181,31 @@ async function openPlaylist(plId) {
   const pl = AppState.playlists.find(p => String(p.id) === String(plId)) ||
              curated.find(p => String(p.id) === String(plId)) ||
              DEMO_PLAYLISTS.find(p => String(p.id) === String(plId));
+
+  // Spotify Playlist / Album opening
+  if (AppState.spotifyActive && pl && (pl.kind === 'playlist' || pl.kind === 'album') && pl.id && !String(pl.id).startsWith('curated-') && !String(pl.id).startsWith('custom-')) {
+    AppState.openedCollection = pl;
+    showToast('Đang tải danh sách bài hát...');
+    try {
+      const tracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 500, partial => {
+        if (AppState.openedCollection === pl) {
+          AppState.tracks = partial;
+          renderTrackList();
+        }
+      }, pl.kind, pl.preloadedTracks, pl.name);
+      if (tracks && tracks.length) {
+        pl.preloadedTracks = tracks;
+        if (AppState.openedCollection === pl) {
+          AppState.tracks = tracks;
+          renderTrackList();
+          showToast(`Đã mở: ${pl.name} (${tracks.length} bài)`);
+        }
+      }
+    } catch (e) {
+      showToast('Lỗi tải bài hát Spotify');
+    }
+    return;
+  }
 
   // 1. Curated Open Web Collection (Zero Spotify required, 100M+ global catalog)
   if (pl && (pl.source === 'open' || String(pl.id).startsWith('curated-'))) {
@@ -3394,6 +4355,19 @@ function selectTrack(index, autoPlay = false) {
 
   renderTrackList();
 
+  const tr = currentTrack();
+  const isDirectWebOrLocal = Boolean(
+    tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
+  );
+
+  if (AppState.spotifyActive && tr && tr.uri && !isDirectWebOrLocal && autoPlay) {
+    const uris = AppState.tracks.map(x => x.uri).filter(u => u && u.startsWith('spotify:'));
+    const winStart = Math.max(0, AppState.idx - 10);
+    const winUris = uris.slice(winStart, winStart + 80);
+    const relOffset = Math.max(0, AppState.idx - winStart);
+    SpotifyClient.playUris(winUris, relOffset, SpotifyClient.getWebDeviceId(), 0).catch(() => {});
+  }
+
   if (autoPlay) {
     setPlaying(true, true);
   }
@@ -3410,6 +4384,17 @@ function setPlaying(playState, skipRemoteCall = false) {
     AudioEngine.ensureContext();
   }
 
+  if (AppState.spotifyActive && !isDirectWebOrLocal && !skipRemoteCall) {
+    if (AppState.playing) {
+      const uris = AppState.tracks.map(x => x.uri).filter(u => u && u.startsWith('spotify:'));
+      const winStart = Math.max(0, AppState.idx - 10);
+      const winUris = uris.slice(winStart, winStart + 80);
+      const relOffset = Math.max(0, AppState.idx - winStart);
+      SpotifyClient.resumePlayback(winUris, relOffset, AppState.pos * 1000).catch(() => {});
+    } else {
+      SpotifyClient.pausePlayback().catch(() => {});
+    }
+  }
 
   if (AudioEngine.setReferencePlaying) {
     AudioEngine.setReferencePlaying(AppState.playing);
@@ -3458,6 +4443,7 @@ function switchTab(tabName) {
   if (searchWrap) {
     searchWrap.classList.toggle('show', tabName === 'search');
     if (tabName === 'search') {
+      syncSearchSourcePills();
       const inp = document.getElementById('search-input');
       if (inp) setTimeout(() => inp.focus(), 50);
     }
@@ -3465,7 +4451,82 @@ function switchTab(tabName) {
 
   const curated = (window.OpenMusicClient && window.OpenMusicClient.CURATED_COLLECTIONS) || [];
 
-  // Open Web tab filtering
+  if (AppState.spotifyActive) {
+    if (tabName === 'liked') {
+      if (AppState.likedTracks && AppState.likedTracks.length) {
+        AppState.tracks = AppState.likedTracks.slice();
+        renderTrackList();
+      }
+      SpotifyClient.fetchLikedTracks(10000, partial => {
+        AppState.likedTracks = partial;
+        if (AppState.tab === 'liked') {
+          AppState.tracks = partial.slice();
+          renderTrackList();
+        }
+      }).then(list => {
+        if (list.length) {
+          AppState.likedTracks = list;
+          if (AppState.tab === 'liked') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'top') {
+      if (AppState.topTracks && AppState.topTracks.length) {
+        AppState.tracks = AppState.topTracks.slice();
+        renderTrackList();
+      }
+      SpotifyClient.fetchTopTracks().then(list => {
+        if (list.length) {
+          AppState.topTracks = list;
+          if (AppState.tab === 'top') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'recent') {
+      if (AppState.recentTracks && AppState.recentTracks.length) {
+        AppState.tracks = AppState.recentTracks.slice();
+        renderTrackList();
+      }
+      SpotifyClient.fetchRecentTracks().then(list => {
+        if (list.length) {
+          AppState.recentTracks = list;
+          if (AppState.tab === 'recent') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'playlists') {
+      SpotifyClient.fetchPlaylists(200).then(list => {
+        const derivedAlbums = buildLibraryAlbums(AppState.allTracks);
+        AppState.playlists = mergeCollections(curated, list, derivedAlbums);
+        if (AppState.tab === 'playlists') renderTrackList();
+      }).catch(() => {
+        AppState.playlists = mergeCollections(curated, DEMO_PLAYLISTS);
+        if (AppState.tab === 'playlists') renderTrackList();
+      });
+      return;
+    }
+    if (tabName === 'search') {
+      filterSearch(AppState.searchQuery);
+      return;
+    }
+    AppState.tracks = AppState.allTracks.slice();
+    renderTrackList();
+    return;
+  }
+
+  // Open Web tab filtering (Free Web Mode default)
   if (tabName === 'liked') {
     AppState.tracks = (AppState.likedTracks || []).slice();
   } else if (tabName === 'top') {
@@ -3492,13 +4553,35 @@ function syncNavTabs() {
 
 
 let searchDebounce = null;
+function syncSearchSourcePills() {
+  const pillOpen = document.getElementById('src-pill-open');
+  const pillSp = document.getElementById('src-pill-spotify');
+  const isSp = AppState.searchSource === 'spotify';
+  if (pillOpen) pillOpen.classList.toggle('on', !isSp);
+  if (pillSp) pillSp.classList.toggle('on', isSp);
+}
+
 function filterSearch(q) {
   AppState.searchQuery = q;
   AppState.searchOffset = 0;
   clearTimeout(searchDebounce);
 
-  const cleanQ = String(q || "").trim();
-  if (cleanQ.length >= 2 && window.OpenMusicClient) {
+  const cleanQ = String(q || '').trim();
+  const searchSource = AppState.searchSource || (AppState.spotifyActive ? 'spotify' : 'open');
+
+  if (searchSource === 'spotify' && AppState.spotifyActive && cleanQ.length >= 2) {
+    searchDebounce = setTimeout(() => {
+      SpotifyClient.searchTracks(cleanQ, 0).then(res => {
+        AppState.tracks = res;
+        AppState.searchOffset = res.length;
+        AppState.searchHasMore = res.length >= 50;
+        renderTrackList();
+      }).catch(() => {});
+    }, 300);
+    return;
+  }
+
+  if (searchSource === 'open' && cleanQ.length >= 2 && window.OpenMusicClient) {
     searchDebounce = setTimeout(() => {
       OpenMusicClient.search(cleanQ, 50).then(res => {
         AppState.tracks = res;
@@ -3624,10 +4707,6 @@ function mergeUniqueTracks(...arrays) {
   }
   return out;
 }
-
-
-
-let remotePollTimer = null;
 
 
 // In-App GitHub Update Notifier (checks GitHub Releases API & version.json)
@@ -3803,6 +4882,287 @@ function tickFrame(now) {
     });
   }
 
+
+// ===== SPOTIFY & DEVICE MODAL CONTROLLERS =====
+function openSpotifyModal() {
+  const m = document.getElementById('spotify-modal');
+  if (!m) return;
+  const inp = document.getElementById('sp-client-id');
+  const redir = document.getElementById('sp-redirect-uri');
+  if (inp) inp.value = SpotifyClient.getClientId();
+  if (redir) redir.textContent = SpotifyClient.getRedirectUri();
+  m.hidden = false;
+}
+
+function closeSpotifyModal() {
+  const m = document.getElementById('spotify-modal');
+  if (m) m.hidden = true;
+}
+
+async function openDeviceModal() {
+  const m = document.getElementById('device-modal');
+  if (!m) return;
+  m.hidden = false;
+  if (AppState.spotifyActive) {
+    try {
+      const devs = await SpotifyClient.fetchDevices();
+      if (devs && devs.length) {
+        AppState.devices = devs;
+      }
+    } catch (e) {}
+  }
+  renderDeviceList();
+}
+
+function closeDeviceModal() {
+  const m = document.getElementById('device-modal');
+  if (m) m.hidden = true;
+}
+
+function renderDeviceList() {
+  const box = document.getElementById('device-list');
+  if (!box) return;
+  box.innerHTML = AppState.devices
+    .map(
+      d => `
+    <div class="device-item${d.is_active ? ' active' : ''}" data-dev="${escHtml(d.id)}">
+      <div>
+        <div style="font-size:13px;color:var(--paper)">${escHtml(d.name)}</div>
+        <div class="mono dim" style="margin-top:2px">${d.type === 'Smartphone' ? 'Điện thoại' : 'Máy tính'}</div>
+      </div>
+      <span class="mono ${d.is_active ? 'acc' : 'dim'}">${d.is_active ? 'Đang phát' : 'Chuyển sang'}</span>
+    </div>`
+    )
+    .join('');
+
+  box.querySelectorAll('[data-dev]').forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.dev;
+      AppState.devices.forEach(d => (d.is_active = d.id === id));
+      const chosen = AppState.devices.find(d => d.id === id);
+      if (chosen) {
+        AppState.activeDeviceName = chosen.name;
+        document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = chosen.name));
+      }
+      if (AppState.spotifyActive) {
+        try {
+          await SpotifyClient.transferPlayback(id, true);
+        } catch (e) {}
+      }
+      renderDeviceList();
+      showToast('Đã chuyển âm thanh sang: ' + (chosen ? chosen.name : 'Thiết bị mới'));
+      setTimeout(closeDeviceModal, 350);
+    };
+  });
+}
+
+function mergeUniqueTracks(...arrays) {
+  const seen = new Set();
+  const out = [];
+  for (const arr of arrays) {
+    if (!Array.isArray(arr)) continue;
+    for (const tr of arr) {
+      if (!tr) continue;
+      const key = tr.id || tr.uri || `${tr.t}__${tr.a}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(tr);
+      }
+    }
+  }
+  return out;
+}
+
+async function syncFullSpotifyLibrary(showFeedback = false) {
+  if (!AppState.spotifyActive) return;
+  if (showFeedback) showToast('Đang đồng bộ toàn bộ thư viện Spotify...');
+
+  try {
+    const curated = (window.OpenMusicClient && window.OpenMusicClient.CURATED_COLLECTIONS) || [];
+    const [queueInfo, liked, top, recent, savedAlbumsInfo, playlists, featured, releases] = await Promise.all([
+      SpotifyClient.fetchCurrentQueue().catch(() => ({ playback: null, tracks: [] })),
+      SpotifyClient.fetchLikedTracks(10000, partial => {
+        AppState.likedTracks = partial;
+        if (AppState.tab === 'liked') {
+          AppState.tracks = partial.slice();
+          renderTrackList();
+        }
+      }).catch(() => []),
+      SpotifyClient.fetchTopTracks().catch(() => []),
+      SpotifyClient.fetchRecentTracks().catch(() => []),
+      SpotifyClient.fetchSavedAlbums().catch(() => ({ albums: [], tracks: [] })),
+      SpotifyClient.fetchPlaylists(200).catch(() => []),
+      SpotifyClient.fetchFeaturedPlaylists(30).catch(() => []),
+      SpotifyClient.fetchNewReleases(30).catch(() => [])
+    ]);
+
+    if (liked.length) AppState.likedTracks = liked;
+    if (top.length) AppState.topTracks = top;
+    if (recent.length) AppState.recentTracks = recent;
+
+    let combined = mergeUniqueTracks(
+      AppState.localTracks || [],
+      queueInfo.tracks || [],
+      liked,
+      top,
+      recent,
+      savedAlbumsInfo.tracks || []
+    );
+
+    if (combined.length < 40 && playlists.length > 0) {
+      const topPlaylists = playlists.slice(0, 3);
+      for (const pl of topPlaylists) {
+        try {
+          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200, null, pl.kind, pl.preloadedTracks, pl.name);
+          combined = mergeUniqueTracks(combined, plTracks);
+        } catch (e) {}
+      }
+    }
+
+    const derivedAlbums = buildLibraryAlbums(combined);
+    const mergedCols = mergeCollections(curated, playlists, featured, releases, savedAlbumsInfo.albums || [], derivedAlbums);
+    if (mergedCols.length) {
+      AppState.playlists = mergedCols;
+    }
+
+    if (combined.length > 0) {
+      AppState.allTracks = combined;
+      if (AppState.tab === 'queue' && !AppState.openedCollection) {
+        AppState.tracks = combined.slice();
+        selectTrack(0, false);
+      } else {
+        renderTrackList();
+      }
+    }
+
+    if (queueInfo.playback) {
+      applyRemotePlaybackState(queueInfo.playback);
+    }
+
+    if (showFeedback) {
+      showToast(`Đã đồng bộ Spotify: ${combined.length} bài hát`);
+    }
+  } catch (err) {
+    if (showFeedback) showToast('Lỗi khi đồng bộ thư viện Spotify');
+  }
+}
+
+function applyRemotePlaybackState(pb) {
+  if (!pb) return;
+  const tr = currentTrack();
+  const isDirectWebOrLocal = Boolean(
+    tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
+  );
+  if (isDirectWebOrLocal && AppState.playing) {
+    return;
+  }
+
+  if (pb.device && pb.device.name) {
+    AppState.activeDeviceName = pb.device.name;
+    document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = pb.device.name));
+  }
+  if (typeof pb.is_playing === 'boolean') {
+    AppState.playing = pb.is_playing;
+    const iconHTML = AppState.playing ? TASK_ICONS.pause : TASK_ICONS.play;
+    document.querySelectorAll('.js-play').forEach(btn => {
+      btn.innerHTML = iconHTML;
+      btn.dataset.state = AppState.playing ? 'playing' : 'paused';
+    });
+  }
+  if (typeof pb.progress_ms === 'number') {
+    AppState.pos = Math.round(pb.progress_ms / 1000);
+  }
+  if (pb.item && pb.item.id) {
+    const mapped = SpotifyClient.mapSpotifyTrack(pb.item);
+    if (mapped) {
+      const existingIdx = AppState.tracks.findIndex(x => x.id === mapped.id);
+      if (existingIdx >= 0) {
+        if (AppState.idx !== existingIdx) {
+          AppState.idx = existingIdx;
+          renderMetadata();
+          renderTrackList();
+        }
+      } else if (!AppState.openedCollection) {
+        AppState.tracks.unshift(mapped);
+        AppState.allTracks = mergeUniqueTracks([mapped], AppState.allTracks);
+        AppState.idx = 0;
+        renderMetadata();
+        renderTrackList();
+      }
+    }
+  }
+}
+
+let remotePollTimer = null;
+function startRemotePlaybackPolling() {
+  if (remotePollTimer) clearInterval(remotePollTimer);
+  remotePollTimer = setInterval(async () => {
+    if (!AppState.spotifyActive) return;
+    const pb = await SpotifyClient.fetchCurrentPlayback();
+    if (pb && pb.item) {
+      applyRemotePlaybackState(pb);
+    }
+  }, 4000);
+}
+
+async function initSpotifySession() {
+  try {
+    await SpotifyClient.handleCallbackIfPresent();
+  } catch (err) {
+    showToast(err.message);
+  }
+  if (!SpotifyClient.hasToken()) return;
+
+  try {
+    const profile = await SpotifyClient.fetchProfile();
+    if (profile && profile.display_name) {
+      AppState.spotifyActive = true;
+      AppState.searchSource = 'spotify';
+      AppState.userName = profile.display_name;
+      syncSearchSourcePills();
+      document.querySelectorAll('.js-user-status').forEach(el => {
+        el.textContent = profile.display_name;
+      });
+      showToast('Đã kết nối Spotify: ' + profile.display_name);
+
+      await syncFullSpotifyLibrary(true);
+      startRemotePlaybackPolling();
+
+      SpotifyClient.initWebPlaybackSDK(
+        st => {
+          if (!st) return;
+          const tr = currentTrack();
+          const isDirectWebOrLocal = Boolean(
+            tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
+          );
+          if (isDirectWebOrLocal && AppState.playing) {
+            return;
+          }
+          AppState.playing = !st.paused;
+          AppState.pos = Math.round((st.position || 0) / 1000);
+          const curItem = st.track_window && st.track_window.current_track;
+          if (curItem) {
+            if (!tr || tr.id !== curItem.id) {
+              const matchIdx = AppState.tracks.findIndex(x => x.id === curItem.id || x.uri === curItem.uri);
+              if (matchIdx >= 0) {
+                AppState.idx = matchIdx;
+              }
+              renderMetadata();
+              renderTrackList();
+            }
+          }
+        },
+        devId => {
+          AppState.activeDeviceName = 'OpenMusic Web Player';
+          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'OpenMusic Web Player'));
+        }
+      );
+    }
+  } catch (e) {
+    AppState.spotifyActive = false;
+  }
+}
+
 function initApp() {
   initTheme();
   // Inject task icons into transport buttons
@@ -3852,7 +5212,9 @@ function initApp() {
 
   function commitSeekPosition(targetPos) {
     AppState.pos = targetPos;
-
+    if (AppState.spotifyActive) {
+      SpotifyClient.seekPosition(targetPos).catch(() => {});
+    }
     if (AudioEngine.seekLocalAudio) {
       AudioEngine.seekLocalAudio(targetPos);
     }
@@ -3902,7 +5264,9 @@ function initApp() {
     document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = pct + '%'));
     document.querySelectorAll('.js-vol-head').forEach(h => (h.style.left = pct + '%'));
     document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = pct + '%'));
-    
+    if (AppState.spotifyActive) {
+      SpotifyClient.setRemoteVolume(pct).catch(() => {});
+    }
   }
 
   document.querySelectorAll('.js-vol-preset').forEach(btn => {
@@ -4027,6 +5391,88 @@ function initApp() {
     b.onclick = () => toggleMobileDrawer(b.dataset.mobDrawer);
   });
 
+  // Search Source Pills
+  const pillOpen = document.getElementById('src-pill-open');
+  const pillSp = document.getElementById('src-pill-spotify');
+  if (pillOpen) {
+    pillOpen.onclick = () => {
+      AppState.searchSource = 'open';
+      syncSearchSourcePills();
+      filterSearch(AppState.searchQuery);
+    };
+  }
+  if (pillSp) {
+    pillSp.onclick = () => {
+      if (!AppState.spotifyActive) {
+        showToast('Vui lòng kết nối tài khoản Spotify để tìm kiếm trong kho Spotify');
+        openSpotifyModal();
+        return;
+      }
+      AppState.searchSource = 'spotify';
+      syncSearchSourcePills();
+      filterSearch(AppState.searchQuery);
+    };
+  }
+  syncSearchSourcePills();
+
+  // Spotify Modals & Connect Handlers
+  document.querySelectorAll('.js-open-spotify').forEach(b => (b.onclick = openSpotifyModal));
+  document.querySelectorAll('.js-close-spotify').forEach(b => (b.onclick = closeSpotifyModal));
+  document.querySelectorAll('.js-open-devices').forEach(b => (b.onclick = openDeviceModal));
+  document.querySelectorAll('.js-close-devices').forEach(b => (b.onclick = closeDeviceModal));
+
+  document.querySelectorAll('.js-sync-library').forEach(b => {
+    b.onclick = () => {
+      if (AppState.spotifyActive) {
+        syncFullSpotifyLibrary(true);
+      } else {
+        openSpotifyModal();
+      }
+    };
+  });
+
+  const btnConnectSp = document.getElementById('btn-connect-spotify');
+  if (btnConnectSp) {
+    btnConnectSp.onclick = async () => {
+      const val = document.getElementById('sp-client-id').value.trim();
+      try {
+        await SpotifyClient.startLogin(val);
+      } catch (err) {
+        showToast(err.message);
+      }
+    };
+  }
+
+  const btnSaveId = document.getElementById('btn-save-client-id');
+  if (btnSaveId) {
+    btnSaveId.onclick = () => {
+      const val = document.getElementById('sp-client-id').value.trim();
+      SpotifyClient.setClientId(val);
+      showToast(val ? 'Đã lưu tạm Client ID trong phiên hiện tại' : 'Đã xóa Client ID');
+    };
+  }
+
+  const btnLogoutSp = document.getElementById('btn-logout-spotify');
+  if (btnLogoutSp) {
+    btnLogoutSp.onclick = () => {
+      SpotifyClient.logout();
+      AppState.spotifyActive = false;
+      AppState.searchSource = 'open';
+      AppState.userName = 'Web Mở';
+      const curated = (window.OpenMusicClient && window.OpenMusicClient.CURATED_COLLECTIONS) || [];
+      AppState.allTracks = DEMO_TRACKS.slice();
+      AppState.tracks = DEMO_TRACKS.slice();
+      AppState.playlists = mergeCollections(curated, DEMO_PLAYLISTS);
+      AppState.openedCollection = null;
+      syncSearchSourcePills();
+      document.querySelectorAll('.js-user-status').forEach(el => (el.textContent = 'Web Mở'));
+      renderTrackList();
+      renderMetadata();
+      closeSpotifyModal();
+      showToast('Đã ngắt kết nối Spotify & xóa toàn bộ phiên RAM');
+    };
+  }
+
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.target.matches('input, textarea')) return;
@@ -4040,6 +5486,8 @@ function initApp() {
       e.preventDefault();
       prevTrack();
     } else if (e.key === 'Escape') {
+      closeSpotifyModal();
+      closeDeviceModal();
       closeCreatePlaylistModal();
       closeAddToPlaylistModal();
       closeMobileDrawers();
@@ -4080,6 +5528,7 @@ function initApp() {
     };
   });
 
+  initSpotifySession();
   checkGitHubUpdate(false);
   requestAnimationFrame(tickFrame);
 }
