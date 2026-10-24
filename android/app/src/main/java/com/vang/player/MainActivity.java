@@ -29,8 +29,8 @@ import android.webkit.WebViewClient;
  * - Supports native Android local audio file picker, microphone visualizer permissions, and wake-lock.
  */
 public class MainActivity extends Activity {
-    private static final String APP_WEB_URL = "https://nguyenvanhoanglong478-source.github.io/Vang-Player/";
-    private static final String LOCAL_FALLBACK_URL = "file:///android_asset/index.html";
+    private static final String APP_LOCAL_URL = "file:///android_asset/index.html";
+    private static final String SPOTIFY_REDIRECT_PREFIX = "https://nguyenvanhoanglong478-source.github.io/Vang-Player/";
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
 
     private WebView webView;
@@ -130,7 +130,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.loadUrl(APP_WEB_URL);
+        webView.loadUrl(APP_LOCAL_URL);
     }
 
     @Override

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.vang.player",
+      "sha256_cert_fingerprints": [
+        "24:CD:3E:72:42:CF:09:7E:24:3D:2A:06:85:F0:E9:DF:D5:72:E2:2A:06:23:E9:90:E3:47:8B:50:1E:3B:4E:EC"
+      ]
+    }
+  }
+]
