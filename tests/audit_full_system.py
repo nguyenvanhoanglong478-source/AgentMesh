@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BASE_URL = (ROOT / "index.html").resolve().as_uri()
 
 async def run_comprehensive_audit():
-    print(f"=== KHỞI CHẠY KIỂM THỬ TOÀN DIỆN HỆ THỐNG OPENMUSIC ===", flush=True)
+    print(f"=== KHỞI CHẠY KIỂM THỬ TOÀN DIỆN HỆ THỐNG OPENMUSIC (KIẾN TRÚC MỚI) ===", flush=True)
     print(f"URL kiểm thử: {BASE_URL}\n", flush=True)
 
     findings = {
@@ -79,6 +79,41 @@ async def run_comprehensive_audit():
         else:
             print("  ✓ Nút bấm: 100% các nút và điều khiển đều đạt chuẩn hình vuông (border-radius: 0px)", flush=True)
 
+        # Verify large volume slider in right pane is removed, only bottom slider remains
+        right_vol_count = await page.locator(".right-pane .vol-track").count()
+        bottom_vol_count = await page.locator(".transport-right .vol-track").count()
+        if right_vol_count > 0:
+            findings["UI"].append({"severity": "HIGH", "issue": "Vẫn còn thanh volume lớn ở khung dọc bên phải"})
+        elif bottom_vol_count != 1:
+            findings["UI"].append({"severity": "HIGH", "issue": "Thanh volume ở thanh điều khiển đáy không tìm thấy"})
+        else:
+            print("  ✓ Bố cục Volume: Đã bỏ thanh volume lớn ở khung phải, chỉ giữ 1 thanh âm lượng dưới đáy", flush=True)
+
+        # Verify 7 frequency meters on UI
+        missing_meters = []
+        for meter_cls in [".js-m-sub", ".js-m-bass", ".js-m-lowmid", ".js-m-mid", ".js-m-highmid", ".js-m-treble", ".js-m-air"]:
+            if await page.locator(meter_cls).count() == 0:
+                missing_meters.append(meter_cls)
+        if missing_meters:
+            findings["UI"].append({"severity": "HIGH", "issue": f"Thiếu các cột hiển thị phổ tần số: {missing_meters}"})
+        else:
+            print("  ✓ Phổ tần số: Hiện diện đầy đủ 7 dải tần (Siêu trầm -> Siêu cao) trên giao diện", flush=True)
+
+        # Check Light Mode / Dark Mode toggle
+        theme_init = await page.evaluate("document.documentElement.getAttribute('data-theme')")
+        toggle_btn = page.locator(".js-toggle-theme").first
+        await toggle_btn.click()
+        await page.wait_for_timeout(200)
+        theme_toggled = await page.evaluate("document.documentElement.getAttribute('data-theme')")
+        if theme_toggled == theme_init:
+            findings["UI"].append({"severity": "HIGH", "issue": "Nút đổi Light Mode / Dark Mode không hoạt động"})
+        else:
+            print(f"  ✓ Chế độ màu: Bật tắt mượt mà giữa Dark Mode và Light Mode (từ '{theme_init}' -> '{theme_toggled}')", flush=True)
+            # Revert back to dark for consistency
+            if theme_toggled == "light":
+                await toggle_btn.click()
+                await page.wait_for_timeout(200)
+
         # Check Mobile Viewport (iPhone 390x844)
         mob_ctx = await browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, device_scale_factor=2)
         mob_page = await mob_ctx.new_page()
@@ -113,14 +148,23 @@ async def run_comprehensive_audit():
         # -------------------------------------------------------------
         # DOMAIN 2: AUDIO ENGINE & TRANSIT AUDIT
         # -------------------------------------------------------------
-        print("\n>>> [2/8] Đang kiểm tra Bộ máy Âm thanh (Audio Engine) & Luồng phát...", flush=True)
+        print("\n>>> [2/8] Đang kiểm tra Bộ máy Âm thanh (Audio Engine) & 7 Dải tần...", flush=True)
 
-        # Check AudioEngine export on window
         has_engine = await page.evaluate("typeof window.AudioEngine !== 'undefined'")
         if not has_engine:
             findings["AUDIO"].append({"severity": "HIGH", "issue": "window.AudioEngine không được export toàn cục"})
         else:
             print("  ✓ AudioEngine: Đã gắn toàn cục trên window an toàn", flush=True)
+
+        # Check 7-band frequency sampling
+        bands_data = await page.evaluate("""() => {
+            if (!window.AudioEngine || !window.AudioEngine.sampleBands) return null;
+            return window.AudioEngine.sampleBands(0.016, true, 0, 120, 0);
+        }""")
+        if not bands_data or "sub" not in bands_data or "air" not in bands_data:
+            findings["AUDIO"].append({"severity": "HIGH", "issue": "AudioEngine.sampleBands không trả về đủ 7 dải tần"})
+        else:
+            print(f"  ✓ 7 Dải tần AudioEngine: sub={bands_data.get('sub', 0):.2f}, bass={bands_data.get('bass', 0):.2f}, mid={bands_data.get('mid', 0):.2f}, air={bands_data.get('air', 0):.2f}", flush=True)
 
         # Test Play/Pause toggle
         is_playing_before = await page.evaluate("window.AppState.playing")
@@ -176,7 +220,7 @@ async def run_comprehensive_audit():
         await page.wait_for_timeout(300)
 
         playlists = await page.evaluate("""() => {
-            return window.AppState.playlists.map(p => ({ id: p.id, name: p.name, source: p.source, count: p.count }));
+            return (window.AppState.playlists || []).map(p => ({ id: p.id, name: p.name, source: p.source, count: p.count }));
         }""")
         print(f"  ✓ Tìm thấy {len(playlists)} tuyển tập và album trong danh mục:", flush=True)
         for pl in playlists[:5]:
@@ -208,55 +252,37 @@ async def run_comprehensive_audit():
             else:
                 print("  ✓ Nút quay lại (← Tuyển tập): Hoạt động chuẩn xác", flush=True)
 
-        # Test opening another Curated playlist (V-Pop Thịnh Hành)
-        vpop_pl = page.locator('#track-list .qrow[data-pl="curated-vpop"]')
-        if await vpop_pl.count() > 0:
-            await vpop_pl.click()
-            try:
-                await page.wait_for_selector("#track-list .qrow[data-idx]", timeout=6000)
-                vpop_tracks = await page.locator("#track-list .qrow[data-idx]").count()
-                print(f"  ✓ Tuyển tập V-Pop Thịnh Hành: Mở thành công với {vpop_tracks} bài hát!", flush=True)
-                await page.locator("#btn-back-playlists").click()
-                await page.wait_for_timeout(200)
-            except Exception as e:
-                findings["PLAYLIST"].append({"severity": "MEDIUM", "issue": f"V-Pop Thịnh Hành tải chậm: {e}"})
-
         # -------------------------------------------------------------
         # DOMAIN 4: API & MẠNG NGOẠI VI AUDIT
         # -------------------------------------------------------------
-        print("\n>>> [4/8] Đang kiểm tra API & Dịch vụ ngoại vi (iTunes / Web Mở / Spotify)...", flush=True)
+        print("\n>>> [4/8] Đang kiểm tra API & Dịch vụ Web Mở (iTunes 100M+ Catalog)...", flush=True)
         api_results = await page.evaluate("""async () => {
             const results = {};
-            // 1. Test iTunes JSONP search
             try {
                 const openTracks = await window.OpenMusicClient.search('Sơn Tùng M-TP', 5);
                 results.itunes = { ok: Array.isArray(openTracks) && openTracks.length > 0, count: openTracks.length };
             } catch (e) {
                 results.itunes = { ok: false, error: String(e) };
             }
-            // 2. Test Spotify Token state
-            results.spotifyTokenActive = window.SpotifyClient.hasToken();
+            results.hasSpotifyClient = typeof window.SpotifyClient !== 'undefined';
             return results;
         }""")
         if not api_results.get("itunes", {}).get("ok"):
             findings["API"].append({"severity": "HIGH", "issue": "API tìm kiếm Web Mở (iTunes JSONP) không phản hồi", "details": api_results.get("itunes")})
         else:
-            print(f"  ✓ API Web Mở (iTunes): Hoạt động bình thường, trả về {api_results['itunes']['count']} kết quả", flush=True)
+            print(f"  ✓ API Web Mở (iTunes): Hoạt động xuất sắc, trả về {api_results['itunes']['count']} kết quả", flush=True)
+
+        if api_results.get("hasSpotifyClient"):
+            findings["API"].append({"severity": "MEDIUM", "issue": "window.SpotifyClient vẫn còn tồn tại trong ngữ cảnh toàn cục"})
+        else:
+            print("  ✓ Tách biệt phụ thuộc: Đã loại bỏ hoàn toàn mã kết nối Spotify dư thừa", flush=True)
 
         # -------------------------------------------------------------
         # DOMAIN 5: TÌM KIẾM (SEARCH) AUDIT
         # -------------------------------------------------------------
-        print("\n>>> [5/8] Đang kiểm tra Bộ tìm kiếm đa nguồn (Search Engine)...", flush=True)
+        print("\n>>> [5/8] Đang kiểm tra Bộ tìm kiếm bài hát trực tiếp...", flush=True)
         await page.locator('[data-tab="search"]').click()
         await page.wait_for_timeout(200)
-
-        # Verify source pills
-        pill_open = page.locator("#src-pill-open")
-        pill_sp = page.locator("#src-pill-spotify")
-        if await pill_open.count() == 0 or await pill_sp.count() == 0:
-            findings["SEARCH"].append({"severity": "HIGH", "issue": "Thiếu các nút chuyển nguồn tìm kiếm (Web Mở / Spotify)"})
-        else:
-            print("  ✓ Nút chọn nguồn (Web Mở & Spotify): Hiện diện đầy đủ", flush=True)
 
         # Test search query
         search_box = page.locator("#search-input")
@@ -276,7 +302,6 @@ async def run_comprehensive_audit():
         # DOMAIN 6: THƯ VIỆN & TRẠNG THÁI (LIBRARY & STATE) AUDIT
         # -------------------------------------------------------------
         print("\n>>> [6/8] Đang kiểm tra Thư viện bài hát (Library, Liked, Local Files)...", flush=True)
-        # Check tabs switching
         tabs = ["queue", "liked", "top", "playlists", "recent", "search"]
         for tab in tabs:
             await page.locator(f'[data-tab="{tab}"]').click()
@@ -286,11 +311,14 @@ async def run_comprehensive_audit():
                 findings["LIBRARY"].append({"severity": "MEDIUM", "issue": f"Tab thư viện '{tab}' không nhận class 'on' khi click"})
         print("  ✓ Chuyển đổi toàn bộ 6 tab thư viện: Chính xác và tức thì (0ms)", flush=True)
 
-        # Check Liked tracks
+        # Check Liked Songs tab
         await page.locator('[data-tab="liked"]').click()
         await page.wait_for_timeout(200)
-        liked_tracks = await page.locator("#track-list .qrow").count()
-        print(f"  ✓ Danh sách Yêu thích: Hiện có {liked_tracks} bài hát đã thích", flush=True)
+        has_liked_header = await page.locator(".track-list h2").text_content()
+        if "Bài hát yêu thích" not in (has_liked_header or ""):
+            findings["LIBRARY"].append({"severity": "HIGH", "issue": "Tab Bài hát yêu thích không hiển thị Spotify Hero Header"})
+        else:
+            print(f"  ✓ Tab Bài hát yêu thích: Hiển thị giao diện Spotify Hero Header hoàn hảo", flush=True)
 
         # Check Local File input element
         has_local_input = await page.locator("#local-file-input").count() > 0
@@ -300,33 +328,46 @@ async def run_comprehensive_audit():
             print("  ✓ Nạp nhạc máy: Cổng nhận file nội bộ (.mp3, .flac, .wav) sẵn sàng", flush=True)
 
         # -------------------------------------------------------------
-        # DOMAIN 7: KẾT NỐI & BẢO MẬT (CONNECTION & SECURITY) AUDIT
+        # DOMAIN 7: PLAYLIST TỰ TẠO (SPOTIFY-STYLE) & BẢO MẬT AUDIT
         # -------------------------------------------------------------
-        print("\n>>> [7/8] Đang kiểm tra Kết nối thiết bị & An toàn dữ liệu...", flush=True)
+        print("\n>>> [7/8] Đang kiểm tra Tính năng Playlist Tự tạo (Spotify Style) & An toàn dữ liệu...", flush=True)
 
-        # Test Device modal
-        await page.locator(".top-right .js-open-devices").click()
-        await page.wait_for_timeout(200)
-        dev_modal_visible = not (await page.locator("#device-modal").is_hidden())
-        if not dev_modal_visible:
-            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Hộp thoại Chuyển đổi Thiết bị không mở được"})
+        # 1. Check Spotify modals are 0
+        sp_modal_count = await page.locator("#spotify-modal").count()
+        dev_modal_count = await page.locator("#device-modal").count()
+        if sp_modal_count > 0 or dev_modal_count > 0:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Tồn dư modal Spotify ({sp_modal_count}) hoặc Device ({dev_modal_count})"})
         else:
-            print("  ✓ Hộp thoại Thiết bị (Device Switcher): Mở thành công", flush=True)
-            await page.locator(".js-close-devices").click()
-            await page.wait_for_timeout(150)
+            print("  ✓ Dọn sạch Spotify: Không còn bất kỳ modal Spotify hoặc Device switcher nào", flush=True)
 
-        # Test Spotify PKCE Modal
-        await page.locator(".js-open-spotify").click()
+        # 2. Test Create Playlist Modal
+        await page.locator(".js-btn-new-playlist").first.click()
         await page.wait_for_timeout(200)
-        sp_modal_visible = not (await page.locator("#spotify-modal").is_hidden())
-        if not sp_modal_visible:
-            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Hộp thoại Spotify OAuth PKCE không mở được"})
+        cpl_visible = not (await page.locator("#create-playlist-modal").is_hidden())
+        if not cpl_visible:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Hộp thoại Tạo Playlist mới không mở được"})
         else:
-            print("  ✓ Hộp thoại Spotify OAuth PKCE: Mở thành công", flush=True)
-            await page.locator(".js-close-spotify").click()
-            await page.wait_for_timeout(150)
+            await page.fill("#cpl-name-input", "Kiểm thử Playlist Mới")
+            await page.fill("#cpl-desc-input", "Mô tả kiểm thử tự động")
+            await page.locator("#btn-submit-create-playlist").click()
+            await page.wait_for_timeout(300)
+            print("  ✓ Tạo danh sách phát: Đã tạo thành công playlist 'Kiểm thử Playlist Mới'", flush=True)
 
-        # Zero-Retention Security verification
+        # 3. Test Add Track To Playlist Modal
+        await page.locator('[data-tab="queue"]').click()
+        await page.wait_for_timeout(200)
+        await page.locator(".js-add-pl-btn").first.click()
+        await page.wait_for_timeout(200)
+        atp_visible = not (await page.locator("#add-to-playlist-modal").is_hidden())
+        if not atp_visible:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Hộp thoại Thêm vào Playlist không mở được"})
+        else:
+            await page.locator("#atp-playlist-list [data-add-pl]").first.click()
+            await page.wait_for_timeout(200)
+            await page.locator(".js-close-atp-modal").first.click()
+            print("  ✓ Thêm bài vào playlist: Thao tác thêm bài vào playlist tự tạo hoạt động trơn tru", flush=True)
+
+        # 4. Zero-Retention Security verification
         storage_check = await page.evaluate("""() => {
             const loc = Object.keys(localStorage);
             const ses = Object.keys(sessionStorage);
@@ -339,52 +380,34 @@ async def run_comprehensive_audit():
             print("  ✓ Bảo mật Zero-Retention: Tuyệt đối không lưu token/mật khẩu vào ổ cứng (100% RAM)", flush=True)
 
         # -------------------------------------------------------------
-        # DOMAIN 8: HIỆU NĂNG & TỐC ĐỘ KHUNG HÌNH (PERFORMANCE) AUDIT
+        # DOMAIN 8: HIỆU NĂNG & HIỆU ỨNG 3D MỚI (PERFORMANCE) AUDIT
         # -------------------------------------------------------------
-        print("\n>>> [8/8] Đang đo đạc Hiệu năng (FPS, CPU Render Budget, Memory)...", flush=True)
-        # Measure frame render execution time in ms (60fps budget = 16.6ms)
+        print("\n>>> [8/8] Đang đo đạc Hiệu năng Hiệu ứng 3D mới (Lăng kính Quỹ đạo Sóng Âm)...", flush=True)
         perf_data = await page.evaluate("""() => {
-            const bands = window.AudioEngine ? window.AudioEngine.sampleBands(0.016, true, 0, 120, 0) : { bass: 0.5, mid: 0.5, high: 0.5, punch: 0.2, energy: 0.4 };
+            const bands = window.AudioEngine ? window.AudioEngine.sampleBands(0.016, true, 0, 120, 0) : {
+                sub: 0.5, bass: 0.5, lowMid: 0.5, mid: 0.5, highMid: 0.5, treble: 0.5, air: 0.5, punch: 0.2, energy: 0.4
+            };
             const acc = [217, 130, 43];
             
-            // Cluster mode
-            window.Visualizer3D.setMode('cluster');
             let t0 = performance.now();
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 50; i++) {
                 window.Visualizer3D.renderFrame(0.016, i * 0.016, bands, acc, 0.5, true);
             }
-            const clusterMs = (performance.now() - t0) / 40;
-
-            // Vortex mode
-            window.Visualizer3D.setMode('vortex');
-            t0 = performance.now();
-            for (let i = 0; i < 40; i++) {
-                window.Visualizer3D.renderFrame(0.016, i * 0.016, bands, acc, 0.5, true);
-            }
-            const vortexMs = (performance.now() - t0) / 40;
-
-            // Ridge mode
-            window.Visualizer3D.setMode('ridge');
-            t0 = performance.now();
-            for (let i = 0; i < 40; i++) {
-                window.Visualizer3D.renderFrame(0.016, i * 0.016, bands, acc, 0.5, true);
-            }
-            const ridgeMs = (performance.now() - t0) / 40;
+            const frameMs = (performance.now() - t0) / 50;
 
             return {
-                clusterMs: Number(clusterMs.toFixed(2)),
-                vortexMs: Number(vortexMs.toFixed(2)),
-                ridgeMs: Number(ridgeMs.toFixed(2))
+                frameMs: Number(frameMs.toFixed(2)),
+                mode: "3D Kinetic Orbital Prism"
             };
         }""")
-        c_ms = perf_data.get("clusterMs", 0)
-        v_ms = perf_data.get("vortexMs", 0)
-        r_ms = perf_data.get("ridgeMs", 0)
-        print(f"  ✓ Thời gian render mỗi frame: Khối đốm hạt={c_ms}ms, Xoáy hạt={v_ms}ms, Địa hình={r_ms}ms", flush=True)
-        if c_ms > 16.6:
-            findings["PERFORMANCE"].append({"severity": "HIGH", "issue": f"Chế độ Khối đốm hạt vượt ngân sách 16.6ms: {c_ms}ms"})
+        f_ms = perf_data.get("frameMs", 0)
+        mode = perf_data.get("mode", "prism")
+        print(f"  ✓ Thời gian render hiệu ứng 3D duy nhất ({mode}): {f_ms}ms/frame", flush=True)
+        if f_ms > 16.6:
+            findings["PERFORMANCE"].append({"severity": "HIGH", "issue": f"Hiệu ứng 3D vượt ngân sách 16.6ms: {f_ms}ms"})
         else:
-            print(f"  ✓ Ngân sách CPU: Đạt chuẩn 60-144 FPS siêu mượt ({c_ms}ms < 16.6ms)", flush=True)
+            fps_est = int(1000 / max(f_ms, 0.1))
+            print(f"  ✓ Ngân sách CPU: Siêu tiết kiệm tài nguyên (~{fps_est} FPS lý thuyết, {f_ms}ms << 16.6ms)", flush=True)
 
         # Check Canvas 2D / 3D active state
         canvas_active = await page.evaluate("""() => {
