@@ -675,14 +675,15 @@ const SpotifyClient = (function () {
     }
   }
 
-  async function playContextUri(contextUri, offsetIndex = 0, deviceId = null) {
-    return executePlayPayload(
-      {
-        context_uri: contextUri,
-        offset: { position: offsetIndex }
-      },
-      deviceId
-    );
+  async function playContextUri(contextUri, offsetIndex = 0, deviceId = null, positionMs = 0) {
+    const payload = {
+      context_uri: contextUri,
+      offset: { position: offsetIndex }
+    };
+    if (typeof positionMs === 'number') {
+      payload.position_ms = Math.max(0, Math.round(positionMs));
+    }
+    return executePlayPayload(payload, deviceId);
   }
 
   async function searchTracks(query, offset = 0) {
@@ -704,14 +705,15 @@ const SpotifyClient = (function () {
     });
   }
 
-  async function playUris(uris, offsetIndex = 0, deviceId = null) {
-    return executePlayPayload(
-      {
-        uris,
-        offset: { position: offsetIndex }
-      },
-      deviceId
-    );
+  async function playUris(uris, offsetIndex = 0, deviceId = null, positionMs = 0) {
+    const payload = {
+      uris,
+      offset: { position: offsetIndex }
+    };
+    if (typeof positionMs === 'number') {
+      payload.position_ms = Math.max(0, Math.round(positionMs));
+    }
+    return executePlayPayload(payload, deviceId);
   }
 
   async function pausePlayback() {

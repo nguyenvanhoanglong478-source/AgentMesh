@@ -246,6 +246,9 @@ const AudioEngine = (function () {
 
     if (currentRefTrackId === trackKey) {
       if (refAudio && refAudio.src) {
+        if (window.AppState && window.AppState.pos === 0) {
+          try { refAudio.currentTime = 0; } catch (e) {}
+        }
         if (shouldPlayNow() && refAudio.paused) refAudio.play().catch(() => {});
         else if (!shouldPlayNow() && !refAudio.paused) refAudio.pause();
       }
@@ -257,6 +260,9 @@ const AudioEngine = (function () {
     if (refAudio) {
       try {
         refAudio.pause();
+        refAudio.currentTime = 0;
+        refAudio.onended = null;
+        refAudio.onerror = null;
         refAudio.removeAttribute('src');
         refAudio.load();
       } catch (e) {}
@@ -270,7 +276,10 @@ const AudioEngine = (function () {
         refAudio.crossOrigin = 'anonymous';
       }
       refAudio.loop = false;
+      refAudio.onended = null;
+      try { refAudio.currentTime = 0; } catch (e) {}
       refAudio.src = track.localUrl;
+      try { refAudio.currentTime = 0; } catch (e) {}
       if (!refMediaSource && ctx) {
         try {
           refMediaSource = ctx.createMediaElementSource(refAudio);
@@ -280,9 +289,20 @@ const AudioEngine = (function () {
       }
       if (refAudibleGain) refAudibleGain.gain.value = 1.0;
       refAudio.onloadedmetadata = () => {
+        try { refAudio.currentTime = 0; } catch (e) {}
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
         }
+      };
+      refAudio.oncanplay = () => {
+        try {
+          if (!window.AppState || window.AppState.pos === 0) {
+            refAudio.currentTime = 0;
+          }
+        } catch (e) {}
+      };
+      refAudio.onerror = () => {
+        console.warn('AudioEngine: local audio failed to load', track.localUrl);
       };
       refAudio.onended = () => {
         if (window.AppState && window.AppState.repeat) {
@@ -312,7 +332,10 @@ const AudioEngine = (function () {
         refAudio.crossOrigin = 'anonymous';
       }
       refAudio.loop = false;
+      refAudio.onended = null;
+      try { refAudio.currentTime = 0; } catch (e) {}
       refAudio.src = track.previewUrl;
+      try { refAudio.currentTime = 0; } catch (e) {}
       if (!refMediaSource && ctx) {
         try {
           refMediaSource = ctx.createMediaElementSource(refAudio);
@@ -322,9 +345,20 @@ const AudioEngine = (function () {
       }
       if (refAudibleGain) refAudibleGain.gain.value = 1.0;
       refAudio.onloadedmetadata = () => {
+        try { refAudio.currentTime = 0; } catch (e) {}
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
         }
+      };
+      refAudio.oncanplay = () => {
+        try {
+          if (!window.AppState || window.AppState.pos === 0) {
+            refAudio.currentTime = 0;
+          }
+        } catch (e) {}
+      };
+      refAudio.onerror = () => {
+        console.warn('AudioEngine: open audio preview failed or CORS blocked', track.previewUrl);
       };
       refAudio.onended = () => {
         if (window.AppState && window.AppState.repeat) {
@@ -342,6 +376,16 @@ const AudioEngine = (function () {
     // 2. Built-in Demo tracks use the procedural multi-section DemoSynth directly
     if (String(track.id || '').startsWith('demo-')) {
       if (refAudibleGain) refAudibleGain.gain.value = 0.0;
+      if (refAudio) {
+        try {
+          refAudio.pause();
+          refAudio.currentTime = 0;
+          refAudio.onended = null;
+          refAudio.onerror = null;
+          refAudio.removeAttribute('src');
+          refAudio.load();
+        } catch (e) {}
+      }
       return;
     }
 
@@ -381,7 +425,10 @@ const AudioEngine = (function () {
         refAudio.crossOrigin = 'anonymous';
       }
       refAudio.loop = true;
+      refAudio.onended = null;
+      try { refAudio.currentTime = 0; } catch (e) {}
       refAudio.src = item.previewUrl;
+      try { refAudio.currentTime = 0; } catch (e) {}
       if (!refMediaSource && ctx) {
         try {
           refMediaSource = ctx.createMediaElementSource(refAudio);
@@ -435,7 +482,17 @@ const AudioEngine = (function () {
   }
 
   function getPlaybackPosition() {
-    if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime > 0) {
+    const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
+    if (!tr) return null;
+    // Only return refAudio.currentTime for tracks that legitimately use refAudio for sound output (Local & Open Web)!
+    const isDirectAudioTrack = Boolean(
+      tr.localUrl ||
+      ((tr.source === 'open' || tr.isOpenSource || (tr.id && String(tr.id).startsWith('open-'))) && tr.previewUrl)
+    );
+    if (!isDirectAudioTrack) {
+      return null;
+    }
+    if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
       return refAudio.currentTime;
     }
     return null;

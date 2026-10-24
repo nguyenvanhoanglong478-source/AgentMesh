@@ -451,7 +451,7 @@ function bindCollectionHeaderButtons() {
   }
 }
 
-// Open any Playlist or Saved Album reliably and start playback immediately
+// Open any Playlist or Saved Album to browse tracklist WITHOUT autostarting playback
 async function openPlaylist(plId) {
   AudioEngine.ensureContext();
 
@@ -463,11 +463,10 @@ async function openPlaylist(plId) {
   // 1. Curated Open Web Collection (Zero Spotify required, 100M+ global catalog)
   if (pl && (pl.source === 'open' || String(pl.id).startsWith('curated-'))) {
     AppState.openedCollection = pl;
-    showToast('Đang mở: ' + pl.name);
+    showToast('Đã mở: ' + pl.name);
     if (pl.preloadedTracks && pl.preloadedTracks.length) {
       AppState.tracks = pl.preloadedTracks.slice();
       renderTrackList();
-      selectTrack(0, true);
       return;
     }
     const container = document.getElementById('track-list');
@@ -478,17 +477,18 @@ async function openPlaylist(plId) {
           <div class="truncate" style="font-size:12px;font-weight:600;color:var(--acc);flex:1;text-align:center">${escHtml(pl.name)}</div>
           <button id="btn-play-collection" class="word mono on" type="button" style="height:28px;font-size:10.5px">Phát tất cả</button>
         </div>
-        <div class="dim" style="padding:20px 0;font-size:12px">Đang kết nối kho nhạc Web Mở (100M+ bài)...</div>`;
+        <div class="dim" style="padding:20px 0;font-size:12px">Đang tải danh sách bài hát...</div>`;
       bindCollectionHeaderButtons();
     }
     try {
       const items = await OpenMusicClient.fetchCuratedTracks(pl.id);
       if (items && items.length) {
         pl.preloadedTracks = items;
-        AppState.tracks = items;
-        renderTrackList();
-        selectTrack(0, true);
-        showToast(`Đang phát "${pl.name}" (${items.length} bài)`);
+        if (AppState.openedCollection === pl) {
+          AppState.tracks = items;
+          renderTrackList();
+          showToast(`Đã mở: ${pl.name} (${items.length} bài)`);
+        }
       } else {
         showToast('Không tải được bài hát từ Web Mở');
       }
@@ -502,7 +502,7 @@ async function openPlaylist(plId) {
     const colMeta = pl || { id: plId, kind: 'playlist', name: 'Tuyển tập', uri: `spotify:playlist:${plId}` };
     AppState.openedCollection = colMeta;
 
-    // 1. Instant path: if preloadedTracks or matching library tracks exist, open & play in 0ms!
+    // 1. Instant path: if preloadedTracks or matching library tracks exist, display without autoplaying!
     const preloaded = (colMeta.preloadedTracks && colMeta.preloadedTracks.length)
       ? colMeta.preloadedTracks.slice()
       : AppState.allTracks.filter(
@@ -513,8 +513,7 @@ async function openPlaylist(plId) {
     if (preloaded.length > 0) {
       AppState.tracks = preloaded;
       renderTrackList();
-      selectTrack(0, true);
-      showToast(`Đang phát "${colMeta.name}" (${preloaded.length} bài)`);
+      showToast(`Đã mở: ${colMeta.name} (${preloaded.length} bài)`);
 
       // If it's a Spotify album or playlist that might have more tracks on the server, fetch in background
       if (!String(plId).startsWith('lib-alb-') && !String(plId).startsWith('pl-')) {
@@ -551,7 +550,6 @@ async function openPlaylist(plId) {
 
     try {
       showToast('Đang mở: ' + colMeta.name);
-      let firstChunkPlayed = false;
       const items = await SpotifyClient.fetchPlaylistTracks(
         plId,
         500,
@@ -559,10 +557,6 @@ async function openPlaylist(plId) {
           if (partial.length && AppState.openedCollection === colMeta) {
             AppState.tracks = partial;
             renderTrackList();
-            if (!firstChunkPlayed) {
-              firstChunkPlayed = true;
-              selectTrack(0, true);
-            }
           }
         },
         colMeta.kind || 'playlist',
@@ -574,33 +568,14 @@ async function openPlaylist(plId) {
         colMeta.preloadedTracks = items;
         AppState.tracks = items;
         renderTrackList();
-        if (!firstChunkPlayed) {
-          selectTrack(0, true);
-        }
-        showToast(`Đang phát "${colMeta.name}" (${items.length} bài)`);
+        showToast(`Đã mở: ${colMeta.name} (${items.length} bài)`);
         return;
-      }
-
-      // 3. Fallback: start playback via context_uri and sync queue or library tracks
-      if (colMeta.uri) {
-        await SpotifyClient.playContextUri(colMeta.uri, 0, SpotifyClient.getWebDeviceId()).catch(() => {});
-        setPlaying(true, true);
-        await new Promise(r => setTimeout(r, 550));
-        const qInfo = await SpotifyClient.fetchCurrentQueue().catch(() => null);
-        if (qInfo && qInfo.tracks && qInfo.tracks.length) {
-          AppState.tracks = qInfo.tracks;
-          renderTrackList();
-          renderMetadata();
-          showToast('Đang phát tuyển tập: ' + colMeta.name);
-          return;
-        }
       }
 
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
-        selectTrack(0, true);
-        showToast('Đang phát: ' + colMeta.name);
+        showToast('Đã mở: ' + colMeta.name);
         return;
       }
 
@@ -611,7 +586,6 @@ async function openPlaylist(plId) {
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
-        selectTrack(0, true);
       } else {
         showToast('Không tải được danh sách bài hát');
       }
@@ -619,7 +593,7 @@ async function openPlaylist(plId) {
     return;
   }
 
-  // Demo mode playlist/album opening
+  // 3. Demo mode playlist/album opening (browsing without autoplay)
   const targetPl = pl || DEMO_PLAYLISTS[0];
   if (targetPl) {
     AppState.openedCollection = targetPl;
@@ -631,8 +605,7 @@ async function openPlaylist(plId) {
       AppState.tracks = DEMO_TRACKS.slice();
     }
     renderTrackList();
-    selectTrack(0, true);
-    showToast('Đang phát: ' + targetPl.name);
+    showToast('Đã mở: ' + targetPl.name);
   }
 }
 
@@ -664,6 +637,9 @@ function selectTrack(index, autoPlay = false) {
   }
   AppState.idx = (index + AppState.tracks.length) % AppState.tracks.length;
   AppState.pos = 0;
+  if (AudioEngine.seekLocalAudio) {
+    AudioEngine.seekLocalAudio(0);
+  }
 
   // Render metadata synchronously so AudioEngine starts inside the user's click gesture
   renderMetadata();
@@ -685,7 +661,7 @@ function selectTrack(index, autoPlay = false) {
     const winStart = Math.max(0, AppState.idx - 10);
     const winUris = uris.slice(winStart, winStart + 80);
     const relOffset = Math.max(0, AppState.idx - winStart);
-    SpotifyClient.playUris(winUris, relOffset, SpotifyClient.getWebDeviceId()).catch(() => {});
+    SpotifyClient.playUris(winUris, relOffset, SpotifyClient.getWebDeviceId(), 0).catch(() => {});
   }
 
   if (autoPlay) {
@@ -1200,6 +1176,15 @@ async function syncFullSpotifyLibrary(showFeedback = false) {
 
 function applyRemotePlaybackState(pb) {
   if (!pb) return;
+  const tr = currentTrack();
+  const isDirectWebOrLocal = Boolean(
+    tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
+  );
+  // CRITICAL: If the current track is a Local file or Open Web track, do NOT let remote Spotify poll hijack playback!
+  if (isDirectWebOrLocal && AppState.playing) {
+    return;
+  }
+
   if (pb.device && pb.device.name) {
     AppState.activeDeviceName = pb.device.name;
     document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = pb.device.name));
@@ -1220,14 +1205,18 @@ function applyRemotePlaybackState(pb) {
     if (mapped) {
       const existingIdx = AppState.tracks.findIndex(x => x.id === mapped.id);
       if (existingIdx >= 0) {
-        AppState.idx = existingIdx;
+        if (AppState.idx !== existingIdx) {
+          AppState.idx = existingIdx;
+          renderMetadata();
+          renderTrackList();
+        }
       } else if (!AppState.openedCollection) {
         AppState.tracks.unshift(mapped);
         AppState.allTracks = mergeUniqueTracks([mapped], AppState.allTracks);
         AppState.idx = 0;
+        renderMetadata();
+        renderTrackList();
       }
-      renderMetadata();
-      renderTrackList();
     }
   }
 }
@@ -1271,13 +1260,24 @@ async function initSpotifySession() {
       SpotifyClient.initWebPlaybackSDK(
         st => {
           if (!st) return;
+          const tr = currentTrack();
+          const isDirectWebOrLocal = Boolean(
+            tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
+          );
+          if (isDirectWebOrLocal && AppState.playing) {
+            return;
+          }
           AppState.playing = !st.paused;
           AppState.pos = Math.round((st.position || 0) / 1000);
           const curItem = st.track_window && st.track_window.current_track;
           if (curItem) {
-            const tr = currentTrack();
             if (!tr || tr.id !== curItem.id) {
+              const matchIdx = AppState.tracks.findIndex(x => x.id === curItem.id || x.uri === curItem.uri);
+              if (matchIdx >= 0) {
+                AppState.idx = matchIdx;
+              }
               renderMetadata();
+              renderTrackList();
             }
           }
         },
@@ -1331,6 +1331,7 @@ async function checkGitHubUpdate(manual = false) {
 // Main Animation Loop (60fps)
 function tickFrame(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  const wallDt = Math.min(1.0, Math.max(0, (now - lastFrame) / 1000));
   lastFrame = now;
 
   const tr = currentTrack();
@@ -1340,10 +1341,10 @@ function tickFrame(now) {
       if (exactPos != null) {
         AppState.pos = exactPos;
       } else {
-        AppState.pos += dt;
+        AppState.pos += wallDt;
       }
     } else {
-      AppState.pos += dt;
+      AppState.pos += wallDt;
     }
     simTime += dt;
     if (AppState.pos >= tr.d) {
