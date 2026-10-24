@@ -290,13 +290,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <button class="word mono js-close-spotify" type="button">Đóng</button>
       </div>
 
-      <div style="padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;line-height:1.45" class="dim">
+      <div style="padding:8px 10px;border:1px solid var(--line);border-radius:0;font-size:11.5px;line-height:1.45" class="dim">
         <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> OpenMusic kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">
         <div>1. Mở <strong>developer.spotify.com/dashboard</strong> → chọn ứng dụng của bạn → mục <strong>Redirect URIs</strong> thêm địa chỉ:</div>
-        <div id="sp-redirect-uri" class="mono acc" style="padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:4px;user-select:all;-webkit-user-select:all"></div>
+        <div id="sp-redirect-uri" class="mono acc" style="padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:0;user-select:all;-webkit-user-select:all"></div>
         <div>2. Dán mã <strong>Spotify Client ID</strong> vào ô dưới đây và bấm <strong>Đăng nhập Spotify</strong>:</div>
       </div>
 

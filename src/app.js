@@ -379,8 +379,8 @@ function renderTrackList() {
           ? `background-image:url('${safeCover}')`
           : `background:${tr.g || 'linear-gradient(135deg,#D9822B,#2A2420)'}`;
         const sourceBadge = (tr.source === 'open' || tr.isOpenSource || (tr.id && String(tr.id).startsWith('open-')))
-          ? '<span class="mono acc" style="font-size:9px;padding:0 3px;border:1px solid rgba(var(--acc-rgb),0.35);border-radius:2px;margin-right:4px">WEB</span>'
-          : (tr.localUrl ? '<span class="mono dim" style="font-size:9px;padding:0 3px;border:1px solid var(--line);border-radius:2px;margin-right:4px">MÁY</span>' : '');
+          ? '<span class="mono acc" style="font-size:9px;padding:0 3px;border:1px solid rgba(var(--acc-rgb),0.35);border-radius:0;margin-right:4px">WEB</span>'
+          : (tr.localUrl ? '<span class="mono dim" style="font-size:9px;padding:0 3px;border:1px solid var(--line);border-radius:0;margin-right:4px">MÁY</span>' : '');
         return `
       <div class="qrow${isCur ? ' cur' : ''}" data-idx="${i}">
         <span class="mono dim qidx">${String(i + 1).padStart(2, '0')}</span>

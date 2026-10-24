@@ -19,6 +19,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+button {
+  border-radius: 0;
+}
+
 html, body {
   width: 100%;
   height: 100%;
@@ -53,7 +57,7 @@ html, body {
 .word {
   background: rgba(236, 229, 216, 0.03);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--paper);
   cursor: pointer;
   font-family: var(--f-sans);
@@ -85,7 +89,7 @@ html, body {
   cursor: default;
 }
 
-/* Compact Icon Buttons for 3D Mode, Audio Source & Tools */
+/* Compact Icon Buttons for 3D Mode, Audio Source & Tools — 100% Geometric Squares */
 .icon-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -95,11 +99,13 @@ html, body {
 .icon-btn {
   background: rgba(236, 229, 216, 0.03);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 0;
   color: var(--dim);
   cursor: pointer;
-  height: 38px;
+  aspect-ratio: 1 / 1;
   width: 100%;
+  height: auto;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -123,7 +129,7 @@ html, body {
   pointer-events: none;
 }
 
-/* Geometric Transport Buttons (Fixed dimensions, never deform) */
+/* Geometric Transport Buttons — 100% Square Layout */
 .ctl-btn {
   background: rgba(236, 229, 216, 0.02);
   border: 1px solid var(--line);
@@ -134,7 +140,8 @@ html, body {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
   flex-shrink: 0;
   transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
@@ -153,6 +160,8 @@ html, body {
 .ctl-btn.play-btn {
   width: 44px;
   height: 44px;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
   border: 1px solid var(--line-strong);
   background: rgba(236, 229, 216, 0.05);
 }
@@ -309,7 +318,7 @@ html, body {
   height: 32px;
   background: rgba(236, 229, 216, 0.03);
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--paper);
   font-family: var(--f-sans);
   font-size: 12.5px;
@@ -368,7 +377,7 @@ html, body {
 .art {
   width: 34px;
   height: 34px;
-  border-radius: 3px;
+  border-radius: 0;
   background-size: cover;
   background-position: center;
   position: relative;
@@ -678,7 +687,7 @@ html, body {
   overflow-y: auto;
   background: var(--ink-elev);
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 22px;
   display: flex;
   flex-direction: column;
@@ -705,7 +714,7 @@ html, body {
   height: 36px;
   background: var(--ink);
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--paper);
   font-family: var(--f-mono);
   font-size: 12px;
@@ -721,7 +730,7 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--paper);
-  border-radius: 4px;
+  border-radius: 0;
   height: 34px;
   padding: 0 14px;
   font-family: var(--f-mono);
@@ -747,7 +756,7 @@ html, body {
   background: transparent;
   color: var(--paper);
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: 0;
   height: 34px;
   padding: 0 14px;
   font-family: var(--f-mono);
@@ -774,7 +783,7 @@ html, body {
   align-items: center;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 0;
   cursor: pointer;
   gap: 10px;
   transition: border-color 0.18s ease, background 0.18s ease;
@@ -797,7 +806,7 @@ html, body {
   z-index: 90;
   background: var(--ink-elev);
   border: 1px solid var(--acc);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 10px 14px;
   display: flex;
   align-items: center;
@@ -818,7 +827,7 @@ html, body {
   transform: translateX(-50%) translateY(16px);
   background: var(--ink-elev);
   border: 1px solid var(--acc);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--paper);
   padding: 8px 14px;
   font-family: var(--f-mono);
