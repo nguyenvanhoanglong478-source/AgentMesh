@@ -1,0 +1,13 @@
+{
+  "findings": {
+    "UI": [],
+    "AUDIO": [],
+    "PLAYLIST": [],
+    "API": [],
+    "SEARCH": [],
+    "LIBRARY": [],
+    "CONNECTION": [],
+    "PERFORMANCE": []
+  },
+  "console_errors": []
+}
