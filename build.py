@@ -31,6 +31,12 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
   </style>
 </head>
 <body>
+  <!-- IMMERSIVE AMBIENT LIGHT BACKDROP -->
+  <div class="ambient-backdrop" aria-hidden="true">
+    <div class="ambient-glow ambient-glow-primary js-ambient-primary"></div>
+    <div class="ambient-glow ambient-glow-secondary js-ambient-secondary"></div>
+  </div>
+
   <div class="app-shell">
     <!-- TOP BAR (Single-row fixed Flexbox — never overflows) -->
     <header class="topbar">
@@ -216,7 +222,25 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         </div>
       </div>
 
-      <!-- 5. Music Player Utilities (Sleep Timer & Update Check) -->
+      <!-- 5. Master Volume Control & Presets -->
+      <div class="sec-block">
+        <div class="sec-hdr">
+          <span class="mono sec-label">Âm lượng</span>
+          <span class="mono acc js-vol-lbl" style="font-size:10.5px">78%</span>
+        </div>
+        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng" style="width:100%;height:6px">
+          <div class="scrub-fill js-vol-fill" style="width:78%"></div>
+          <div class="vol-head js-vol-head" style="left:78%"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:2px">
+          <button class="word mono js-vol-preset" data-v="0" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">0%</button>
+          <button class="word mono js-vol-preset" data-v="0.5" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">50%</button>
+          <button class="word mono js-vol-preset" data-v="0.8" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">80%</button>
+          <button class="word mono js-vol-preset" data-v="1" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">100%</button>
+        </div>
+      </div>
+
+      <!-- 6. Music Player Utilities (Sleep Timer & Update Check) -->
       <div class="sec-block" style="margin-top:auto">
         <div class="sec-hdr">
           <span class="mono sec-label">Hẹn giờ tắt</span>
@@ -255,11 +279,12 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       </div>
 
       <div class="transport-right">
-        <button class="ctl-btn js-mute" type="button" title="Âm lượng / Tắt tiếng" aria-label="Âm lượng"></button>
-        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng">
+        <button class="ctl-btn js-mute" type="button" title="Âm lượng / Tắt tiếng" aria-label="Âm lượng" style="width:40px;height:40px"></button>
+        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng" tabindex="0">
           <div class="scrub-fill js-vol-fill" style="width:78%"></div>
+          <div class="vol-head js-vol-head" style="left:78%"></div>
         </div>
-        <span class="mono dim js-vol-lbl" style="min-width:22px;text-align:right">78</span>
+        <span class="mono dim js-vol-lbl" style="min-width:32px;text-align:right">78%</span>
       </div>
     </footer>
 

@@ -574,6 +574,19 @@ async function openPlaylist(plId) {
         return;
       }
 
+      // Fallback: If Spotify Dev API cannot access restricted editorial playlist, fetch from 100M+ Open Web catalog
+      if (window.OpenMusicClient && window.OpenMusicClient.search) {
+        const queryTerm = (colMeta.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+        const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+        if (openItems && openItems.length) {
+          colMeta.preloadedTracks = openItems;
+          AppState.tracks = openItems;
+          renderTrackList();
+          showToast(`Đã mở: ${colMeta.name} (${openItems.length} bài Web Mở)`);
+          return;
+        }
+      }
+
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
@@ -585,6 +598,17 @@ async function openPlaylist(plId) {
       showToast('Đã mở: ' + colMeta.name);
       return;
     } catch (e) {
+      if (window.OpenMusicClient && window.OpenMusicClient.search) {
+        const queryTerm = (colMeta.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+        const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+        if (openItems && openItems.length) {
+          colMeta.preloadedTracks = openItems;
+          AppState.tracks = openItems;
+          renderTrackList();
+          showToast(`Đã mở: ${colMeta.name} (${openItems.length} bài)`);
+          return;
+        }
+      }
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
@@ -595,19 +619,36 @@ async function openPlaylist(plId) {
     return;
   }
 
-  // 3. Demo mode playlist/album opening (browsing without autoplay)
+  // 3. Demo / Open Web fallback playlist opening
   const targetPl = pl || DEMO_PLAYLISTS[0];
   if (targetPl) {
     AppState.openedCollection = targetPl;
     if (targetPl.preloadedTracks && targetPl.preloadedTracks.length) {
       AppState.tracks = targetPl.preloadedTracks.slice();
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
     } else if (targetPl.trackIds) {
       AppState.tracks = DEMO_TRACKS.filter(t => targetPl.trackIds.includes(t.id));
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
+    } else if (window.OpenMusicClient && window.OpenMusicClient.search) {
+      showToast('Đang tải: ' + targetPl.name);
+      const queryTerm = (targetPl.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+      const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+      if (openItems && openItems.length) {
+        targetPl.preloadedTracks = openItems;
+        AppState.tracks = openItems;
+        renderTrackList();
+        showToast(`Đã mở: ${targetPl.name} (${openItems.length} bài)`);
+      } else {
+        AppState.tracks = DEMO_TRACKS.slice();
+        renderTrackList();
+      }
     } else {
       AppState.tracks = DEMO_TRACKS.slice();
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
     }
-    renderTrackList();
-    showToast('Đã mở: ' + targetPl.name);
   }
 }
 
@@ -1386,6 +1427,13 @@ function tickFrame(now) {
   const progRatio = tr.d > 0 ? AppState.pos / tr.d : 0;
   Visualizer3D.renderFrame(dt, visualTime, bands, currentAcc, progRatio, AppState.playing);
 
+  // Update Ambient Light Background with music bass energy
+  const ambEl = document.querySelector('.js-ambient-primary');
+  if (ambEl) {
+    const boost = AppState.playing ? Math.min(0.28, bands.bass * 0.30) : 0;
+    ambEl.style.opacity = (0.78 + boost).toFixed(2);
+  }
+
   // Update Scrubber UI (only when user is not actively dragging the scrubber)
   if (!isDraggingScrubber) {
     const pct = Math.max(0, Math.min(100, progRatio * 100));
@@ -1507,10 +1555,19 @@ function initApp() {
 
   function commitVolume(ratio) {
     const v = AudioEngine.setVolume(ratio);
-    document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = Math.round(v * 100) + '%'));
-    document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = Math.round(v * 100)));
-    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(v * 100).catch(() => {});
+    const pct = Math.round(v * 100);
+    document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = pct + '%'));
+    document.querySelectorAll('.js-vol-head').forEach(h => (h.style.left = pct + '%'));
+    document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = pct + '%'));
+    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(pct).catch(() => {});
   }
+
+  document.querySelectorAll('.js-vol-preset').forEach(btn => {
+    btn.onclick = () => {
+      const v = parseFloat(btn.dataset.v);
+      if (!isNaN(v)) commitVolume(v);
+    };
+  });
 
   document.querySelectorAll('.js-vol-track').forEach(vt => {
     const getRatio = e => {

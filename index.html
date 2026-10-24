@@ -52,6 +52,47 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Immersive Ambient Light Backdrop */
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  background: var(--ink);
+}
+
+.ambient-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity, background;
+}
+
+.ambient-glow-primary {
+  top: 30%;
+  left: 50%;
+  width: min(1100px, 92vw);
+  height: min(720px, 78vh);
+  transform: translate(-50%, -40%);
+  background: radial-gradient(ellipse at center, rgba(var(--acc-rgb), 0.28) 0%, rgba(var(--acc-rgb), 0.08) 46%, transparent 72%);
+  filter: blur(85px);
+  opacity: 0.88;
+  transition: background 0.8s ease, opacity 0.35s ease;
+}
+
+.ambient-glow-secondary {
+  bottom: 0%;
+  left: 48%;
+  width: min(900px, 88vw);
+  height: min(520px, 52vh);
+  transform: translate(-50%, 20%);
+  background: radial-gradient(ellipse at center, rgba(var(--acc-rgb), 0.16) 0%, rgba(var(--acc-rgb), 0.04) 50%, transparent 76%);
+  filter: blur(95px);
+  opacity: 0.72;
+  transition: background 0.8s ease;
+}
+
 /* Typography & Utility */
 .mono {
   font-family: var(--f-mono);
@@ -200,8 +241,9 @@ html, body {
   display: grid;
   grid-template-columns: 280px 1fr 224px;
   grid-template-rows: 52px 1fr 76px;
-  background: var(--ink);
+  background: transparent;
   position: relative;
+  z-index: 1;
 }
 
 /* Header (Single-line Flexbox — prevents any text wrapping or overflow) */
@@ -214,8 +256,9 @@ html, body {
   height: 52px;
   border-bottom: 1px solid var(--line);
   z-index: 15;
-  background: rgba(14, 13, 11, 0.92);
-  backdrop-filter: blur(8px);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   gap: 12px;
   overflow: hidden;
 }
@@ -272,7 +315,9 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 5;
 }
 
@@ -418,7 +463,7 @@ html, body {
 .stage {
   position: relative;
   overflow: hidden;
-  background: var(--ink);
+  background: transparent;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -501,7 +546,9 @@ html, body {
   gap: 18px;
   overflow-y: auto;
   scrollbar-width: none;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 5;
 }
 
@@ -596,9 +643,11 @@ html, body {
   grid-column: 1 / -1;
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 280px 1fr 224px;
+  grid-template-columns: 280px 1fr 260px;
   align-items: center;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.90);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   z-index: 10;
   height: 76px;
 }
@@ -612,18 +661,24 @@ html, body {
 }
 
 .transport-center {
-  padding: 0 24px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
 .transport-right {
-  padding: 0 16px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+}
+
+.ctl-btn.js-mute {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 /* Scrubber & Volume Track */
@@ -674,8 +729,8 @@ html, body {
 }
 
 .vol-track {
-  width: 76px;
-  height: 4px;
+  width: 105px;
+  height: 5px;
   background: var(--line);
   position: relative;
   cursor: pointer;
@@ -688,7 +743,24 @@ html, body {
 .vol-track::before {
   content: "";
   position: absolute;
-  inset: -14px 0;
+  inset: -14px -6px;
+}
+
+.vol-head {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 0;
+  background: var(--acc);
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--acc);
+  transition: transform 0.1s ease;
+}
+
+.vol-track:hover .vol-head {
+  transform: translate(-50%, -50%) scale(1.25);
 }
 
 /* Modals */
@@ -997,6 +1069,12 @@ html, body {
   </style>
 </head>
 <body>
+  <!-- IMMERSIVE AMBIENT LIGHT BACKDROP -->
+  <div class="ambient-backdrop" aria-hidden="true">
+    <div class="ambient-glow ambient-glow-primary js-ambient-primary"></div>
+    <div class="ambient-glow ambient-glow-secondary js-ambient-secondary"></div>
+  </div>
+
   <div class="app-shell">
     <!-- TOP BAR (Single-row fixed Flexbox — never overflows) -->
     <header class="topbar">
@@ -1182,7 +1260,25 @@ html, body {
         </div>
       </div>
 
-      <!-- 5. Music Player Utilities (Sleep Timer & Update Check) -->
+      <!-- 5. Master Volume Control & Presets -->
+      <div class="sec-block">
+        <div class="sec-hdr">
+          <span class="mono sec-label">Âm lượng</span>
+          <span class="mono acc js-vol-lbl" style="font-size:10.5px">78%</span>
+        </div>
+        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng" style="width:100%;height:6px">
+          <div class="scrub-fill js-vol-fill" style="width:78%"></div>
+          <div class="vol-head js-vol-head" style="left:78%"></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:2px">
+          <button class="word mono js-vol-preset" data-v="0" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">0%</button>
+          <button class="word mono js-vol-preset" data-v="0.5" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">50%</button>
+          <button class="word mono js-vol-preset" data-v="0.8" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">80%</button>
+          <button class="word mono js-vol-preset" data-v="1" type="button" style="flex:1;height:24px;font-size:9.5px;padding:0">100%</button>
+        </div>
+      </div>
+
+      <!-- 6. Music Player Utilities (Sleep Timer & Update Check) -->
       <div class="sec-block" style="margin-top:auto">
         <div class="sec-hdr">
           <span class="mono sec-label">Hẹn giờ tắt</span>
@@ -1221,11 +1317,12 @@ html, body {
       </div>
 
       <div class="transport-right">
-        <button class="ctl-btn js-mute" type="button" title="Âm lượng / Tắt tiếng" aria-label="Âm lượng"></button>
-        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng">
+        <button class="ctl-btn js-mute" type="button" title="Âm lượng / Tắt tiếng" aria-label="Âm lượng" style="width:40px;height:40px"></button>
+        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng" tabindex="0">
           <div class="scrub-fill js-vol-fill" style="width:78%"></div>
+          <div class="vol-head js-vol-head" style="left:78%"></div>
         </div>
-        <span class="mono dim js-vol-lbl" style="min-width:22px;text-align:right">78</span>
+        <span class="mono dim js-vol-lbl" style="min-width:32px;text-align:right">78%</span>
       </div>
     </footer>
 
@@ -1411,12 +1508,23 @@ const OpenMusicClient = (function () {
       preloadedTracks: []
     },
     {
+      id: 'curated-weeknd',
+      kind: 'playlist',
+      source: 'open',
+      name: '🌟 The Weeknd: Tuyển Tập Hit',
+      artist: 'The Weeknd · Blinding Lights, Starboy, Die For You, Save Your Tears...',
+      query: 'The Weeknd',
+      count: 45,
+      cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/4a/1a/03/4a1a0397-5dc3-38ad-9cae-53c8ea6f85d2/24UMGIM22363.rgb.jpg/600x600bb.jpg',
+      preloadedTracks: []
+    },
+    {
       id: 'curated-global',
       kind: 'playlist',
       source: 'open',
       name: '🌍 Top Hits Toàn Cầu',
       artist: 'Taylor Swift, The Weeknd, Billie Eilish...',
-      query: 'Global Top Hits 2024',
+      query: 'Taylor Swift The Weeknd Billie Eilish hits',
       count: 40,
       cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/4a/1a/03/4a1a0397-5dc3-38ad-9cae-53c8ea6f85d2/24UMGIM22363.rgb.jpg/600x600bb.jpg',
       preloadedTracks: []
@@ -1445,13 +1553,18 @@ const OpenMusicClient = (function () {
     }
   ];
 
-  async function fetchCuratedTracks(collectionId) {
+  async function fetchCuratedTracks(collectionId, fallbackQuery = '') {
     const col = CURATED_COLLECTIONS.find(c => c.id === collectionId);
-    if (!col) return [];
+    if (!col) {
+      const q = fallbackQuery || (String(collectionId || '').toLowerCase().includes('weeknd') ? 'The Weeknd' : String(collectionId || ''));
+      if (!q) return [];
+      return search(q, 45);
+    }
     if (col.preloadedTracks && col.preloadedTracks.length) {
       return col.preloadedTracks;
     }
-    const tracks = await search(col.query, col.count || 40);
+    const query = col.query || fallbackQuery || 'The Weeknd';
+    const tracks = await search(query, col.count || 45);
     if (tracks && tracks.length) {
       col.preloadedTracks = tracks;
     }
@@ -4196,6 +4309,19 @@ async function openPlaylist(plId) {
         return;
       }
 
+      // Fallback: If Spotify Dev API cannot access restricted editorial playlist, fetch from 100M+ Open Web catalog
+      if (window.OpenMusicClient && window.OpenMusicClient.search) {
+        const queryTerm = (colMeta.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+        const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+        if (openItems && openItems.length) {
+          colMeta.preloadedTracks = openItems;
+          AppState.tracks = openItems;
+          renderTrackList();
+          showToast(`Đã mở: ${colMeta.name} (${openItems.length} bài Web Mở)`);
+          return;
+        }
+      }
+
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
@@ -4207,6 +4333,17 @@ async function openPlaylist(plId) {
       showToast('Đã mở: ' + colMeta.name);
       return;
     } catch (e) {
+      if (window.OpenMusicClient && window.OpenMusicClient.search) {
+        const queryTerm = (colMeta.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+        const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+        if (openItems && openItems.length) {
+          colMeta.preloadedTracks = openItems;
+          AppState.tracks = openItems;
+          renderTrackList();
+          showToast(`Đã mở: ${colMeta.name} (${openItems.length} bài)`);
+          return;
+        }
+      }
       if (AppState.allTracks.length > 0) {
         AppState.tracks = AppState.allTracks.slice(0, 40);
         renderTrackList();
@@ -4217,19 +4354,36 @@ async function openPlaylist(plId) {
     return;
   }
 
-  // 3. Demo mode playlist/album opening (browsing without autoplay)
+  // 3. Demo / Open Web fallback playlist opening
   const targetPl = pl || DEMO_PLAYLISTS[0];
   if (targetPl) {
     AppState.openedCollection = targetPl;
     if (targetPl.preloadedTracks && targetPl.preloadedTracks.length) {
       AppState.tracks = targetPl.preloadedTracks.slice();
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
     } else if (targetPl.trackIds) {
       AppState.tracks = DEMO_TRACKS.filter(t => targetPl.trackIds.includes(t.id));
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
+    } else if (window.OpenMusicClient && window.OpenMusicClient.search) {
+      showToast('Đang tải: ' + targetPl.name);
+      const queryTerm = (targetPl.name || '').replace(/^(This Is|Playlist|Album|Tuyển tập)\s+/i, '') || 'The Weeknd';
+      const openItems = await window.OpenMusicClient.search(queryTerm, 45).catch(() => []);
+      if (openItems && openItems.length) {
+        targetPl.preloadedTracks = openItems;
+        AppState.tracks = openItems;
+        renderTrackList();
+        showToast(`Đã mở: ${targetPl.name} (${openItems.length} bài)`);
+      } else {
+        AppState.tracks = DEMO_TRACKS.slice();
+        renderTrackList();
+      }
     } else {
       AppState.tracks = DEMO_TRACKS.slice();
+      renderTrackList();
+      showToast('Đã mở: ' + targetPl.name);
     }
-    renderTrackList();
-    showToast('Đã mở: ' + targetPl.name);
   }
 }
 
@@ -5008,6 +5162,13 @@ function tickFrame(now) {
   const progRatio = tr.d > 0 ? AppState.pos / tr.d : 0;
   Visualizer3D.renderFrame(dt, visualTime, bands, currentAcc, progRatio, AppState.playing);
 
+  // Update Ambient Light Background with music bass energy
+  const ambEl = document.querySelector('.js-ambient-primary');
+  if (ambEl) {
+    const boost = AppState.playing ? Math.min(0.28, bands.bass * 0.30) : 0;
+    ambEl.style.opacity = (0.78 + boost).toFixed(2);
+  }
+
   // Update Scrubber UI (only when user is not actively dragging the scrubber)
   if (!isDraggingScrubber) {
     const pct = Math.max(0, Math.min(100, progRatio * 100));
@@ -5129,10 +5290,19 @@ function initApp() {
 
   function commitVolume(ratio) {
     const v = AudioEngine.setVolume(ratio);
-    document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = Math.round(v * 100) + '%'));
-    document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = Math.round(v * 100)));
-    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(v * 100).catch(() => {});
+    const pct = Math.round(v * 100);
+    document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = pct + '%'));
+    document.querySelectorAll('.js-vol-head').forEach(h => (h.style.left = pct + '%'));
+    document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = pct + '%'));
+    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(pct).catch(() => {});
   }
+
+  document.querySelectorAll('.js-vol-preset').forEach(btn => {
+    btn.onclick = () => {
+      const v = parseFloat(btn.dataset.v);
+      if (!isNaN(v)) commitVolume(v);
+    };
+  });
 
   document.querySelectorAll('.js-vol-track').forEach(vt => {
     const getRatio = e => {

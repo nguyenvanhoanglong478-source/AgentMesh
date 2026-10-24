@@ -37,6 +37,47 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Immersive Ambient Light Backdrop */
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  background: var(--ink);
+}
+
+.ambient-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity, background;
+}
+
+.ambient-glow-primary {
+  top: 30%;
+  left: 50%;
+  width: min(1100px, 92vw);
+  height: min(720px, 78vh);
+  transform: translate(-50%, -40%);
+  background: radial-gradient(ellipse at center, rgba(var(--acc-rgb), 0.28) 0%, rgba(var(--acc-rgb), 0.08) 46%, transparent 72%);
+  filter: blur(85px);
+  opacity: 0.88;
+  transition: background 0.8s ease, opacity 0.35s ease;
+}
+
+.ambient-glow-secondary {
+  bottom: 0%;
+  left: 48%;
+  width: min(900px, 88vw);
+  height: min(520px, 52vh);
+  transform: translate(-50%, 20%);
+  background: radial-gradient(ellipse at center, rgba(var(--acc-rgb), 0.16) 0%, rgba(var(--acc-rgb), 0.04) 50%, transparent 76%);
+  filter: blur(95px);
+  opacity: 0.72;
+  transition: background 0.8s ease;
+}
+
 /* Typography & Utility */
 .mono {
   font-family: var(--f-mono);
@@ -185,8 +226,9 @@ html, body {
   display: grid;
   grid-template-columns: 280px 1fr 224px;
   grid-template-rows: 52px 1fr 76px;
-  background: var(--ink);
+  background: transparent;
   position: relative;
+  z-index: 1;
 }
 
 /* Header (Single-line Flexbox — prevents any text wrapping or overflow) */
@@ -199,8 +241,9 @@ html, body {
   height: 52px;
   border-bottom: 1px solid var(--line);
   z-index: 15;
-  background: rgba(14, 13, 11, 0.92);
-  backdrop-filter: blur(8px);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   gap: 12px;
   overflow: hidden;
 }
@@ -257,7 +300,9 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 5;
 }
 
@@ -403,7 +448,7 @@ html, body {
 .stage {
   position: relative;
   overflow: hidden;
-  background: var(--ink);
+  background: transparent;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -486,7 +531,9 @@ html, body {
   gap: 18px;
   overflow-y: auto;
   scrollbar-width: none;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 5;
 }
 
@@ -581,9 +628,11 @@ html, body {
   grid-column: 1 / -1;
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: 280px 1fr 224px;
+  grid-template-columns: 280px 1fr 260px;
   align-items: center;
-  background: var(--ink);
+  background: rgba(14, 13, 11, 0.90);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   z-index: 10;
   height: 76px;
 }
@@ -597,18 +646,24 @@ html, body {
 }
 
 .transport-center {
-  padding: 0 24px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
 .transport-right {
-  padding: 0 16px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+}
+
+.ctl-btn.js-mute {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 /* Scrubber & Volume Track */
@@ -659,8 +714,8 @@ html, body {
 }
 
 .vol-track {
-  width: 76px;
-  height: 4px;
+  width: 105px;
+  height: 5px;
   background: var(--line);
   position: relative;
   cursor: pointer;
@@ -673,7 +728,24 @@ html, body {
 .vol-track::before {
   content: "";
   position: absolute;
-  inset: -14px 0;
+  inset: -14px -6px;
+}
+
+.vol-head {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 0;
+  background: var(--acc);
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--acc);
+  transition: transform 0.1s ease;
+}
+
+.vol-track:hover .vol-head {
+  transform: translate(-50%, -50%) scale(1.25);
 }
 
 /* Modals */

@@ -102,12 +102,23 @@ const OpenMusicClient = (function () {
       preloadedTracks: []
     },
     {
+      id: 'curated-weeknd',
+      kind: 'playlist',
+      source: 'open',
+      name: '🌟 The Weeknd: Tuyển Tập Hit',
+      artist: 'The Weeknd · Blinding Lights, Starboy, Die For You, Save Your Tears...',
+      query: 'The Weeknd',
+      count: 45,
+      cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/4a/1a/03/4a1a0397-5dc3-38ad-9cae-53c8ea6f85d2/24UMGIM22363.rgb.jpg/600x600bb.jpg',
+      preloadedTracks: []
+    },
+    {
       id: 'curated-global',
       kind: 'playlist',
       source: 'open',
       name: '🌍 Top Hits Toàn Cầu',
       artist: 'Taylor Swift, The Weeknd, Billie Eilish...',
-      query: 'Global Top Hits 2024',
+      query: 'Taylor Swift The Weeknd Billie Eilish hits',
       count: 40,
       cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/4a/1a/03/4a1a0397-5dc3-38ad-9cae-53c8ea6f85d2/24UMGIM22363.rgb.jpg/600x600bb.jpg',
       preloadedTracks: []
@@ -136,13 +147,18 @@ const OpenMusicClient = (function () {
     }
   ];
 
-  async function fetchCuratedTracks(collectionId) {
+  async function fetchCuratedTracks(collectionId, fallbackQuery = '') {
     const col = CURATED_COLLECTIONS.find(c => c.id === collectionId);
-    if (!col) return [];
+    if (!col) {
+      const q = fallbackQuery || (String(collectionId || '').toLowerCase().includes('weeknd') ? 'The Weeknd' : String(collectionId || ''));
+      if (!q) return [];
+      return search(q, 45);
+    }
     if (col.preloadedTracks && col.preloadedTracks.length) {
       return col.preloadedTracks;
     }
-    const tracks = await search(col.query, col.count || 40);
+    const query = col.query || fallbackQuery || 'The Weeknd';
+    const tracks = await search(query, col.count || 45);
     if (tracks && tracks.length) {
       col.preloadedTracks = tracks;
     }
