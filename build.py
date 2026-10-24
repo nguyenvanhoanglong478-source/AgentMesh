@@ -49,7 +49,6 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       </div>
 
       <div class="top-right">
-        <button class="word mono js-open-install" type="button">Tải App</button>
         <button class="word mono js-open-devices" type="button">Thiết bị</button>
         <button class="word mono on js-open-spotify" type="button">Spotify</button>
       </div>
@@ -264,17 +263,17 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       <button class="word mono" type="button" data-mob-drawer="left">Thư viện</button>
       <button class="word mono js-vmode-cycle" type="button">Khối đốm hạt</button>
       <button class="word mono" type="button" data-mob-drawer="right">Tùy chỉnh 3D</button>
-      <button class="word mono js-open-install" type="button">Tải App</button>
+      <button class="word mono js-open-devices" type="button">Thiết bị</button>
     </nav>
   </div>
 
   <!-- IN-APP GITHUB UPDATE NOTIFICATION BANNER -->
   <div id="update-banner" class="update-banner" hidden>
     <div>
-      <div id="update-ver-text" style="font-size:12.5px;font-weight:600;color:var(--acc)">Đã có bản cập nhật mới!</div>
-      <div class="dim" style="font-size:11px;margin-top:2px">Tải bản mới nhất từ trang GitHub chính thức của dự án.</div>
+      <div id="update-ver-text" style="font-size:12.5px;font-weight:600;color:var(--acc)">Đã có bản cập nhật web mới!</div>
+      <div class="dim" style="font-size:11px;margin-top:2px">Bấm nút Tải lại để nhận phiên bản mới nhất.</div>
     </div>
-    <a id="update-link-btn" href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest" target="_blank" rel="noopener noreferrer" class="btn-solid" style="text-decoration:none;height:30px;padding:0 10px">Cập nhật</a>
+    <button onclick="location.reload(true)" class="btn-solid" style="height:30px;padding:0 10px">Tải lại trang</button>
     <button id="btn-close-update" class="word mono" type="button" style="height:30px;padding:0 8px">Đóng</button>
   </div>
 
@@ -333,55 +332,6 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- MODAL 3: STANDALONE ANDROID APK, WINDOWS EXE & PWA DOWNLOAD -->
-  <div id="install-modal" class="modal-backdrop" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="inst-modal-title">
-      <div class="modal-hdr">
-        <h2 id="inst-modal-title" class="modal-title">Tải ứng dụng VANG (Android &amp; PC)</h2>
-        <button class="word mono js-close-install" type="button">Đóng</button>
-      </div>
-
-      <p class="dim" style="font-size:12px;line-height:1.45">
-        Tải trực tiếp bộ cài đặt ứng dụng độc lập hoặc kiểm tra bản cập nhật mới nhất trên GitHub:
-      </p>
-
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div class="device-item" style="cursor:default">
-          <div style="padding-right:8px">
-            <div style="font-size:13px;color:var(--paper);font-weight:600">1. Ứng dụng Android độc lập (VANG.apk)</div>
-            <div class="dim" style="font-size:11.5px;margin-top:2px">
-              File cài đặt .APK chính thức cho điện thoại Android (hỗ trợ điều khiển màn hình khóa, hẹn giờ tắt, đọc nhạc trong máy &amp; tự báo cập nhật).
-            </div>
-          </div>
-          <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest/download/VANG.apk" target="_blank" rel="noopener noreferrer" class="btn-solid" style="text-decoration:none">Tải VANG.apk</a>
-        </div>
-
-        <div class="device-item" style="cursor:default">
-          <div style="padding-right:8px">
-            <div style="font-size:13px;color:var(--paper);font-weight:600">2. Ứng dụng Windows độc lập (VANG.exe)</div>
-            <div class="dim" style="font-size:11.5px;margin-top:2px">
-              Chạy ngay trên máy tính Windows không cần cài đặt.
-            </div>
-          </div>
-          <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest/download/VANG.exe" target="_blank" rel="noopener noreferrer" class="btn-outline" style="text-decoration:none">Tải VANG.exe</a>
-        </div>
-
-        <div class="device-item" style="cursor:default">
-          <div style="padding-right:8px">
-            <div style="font-size:13px;color:var(--paper);font-weight:600">3. Cài nhanh từ trình duyệt &amp; Trang GitHub</div>
-            <div class="dim" style="font-size:11.5px;margin-top:2px">
-              Thêm vào màn hình chính iOS/Android hoặc xem toàn bộ các bản phát hành trên GitHub.
-            </div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button id="btn-pwa-install" class="btn-outline" type="button">Cài PWA</button>
-            <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases" target="_blank" rel="noopener noreferrer" class="btn-outline" style="text-decoration:none">GitHub</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- TOAST -->
   <div id="toast" role="status" aria-live="polite"></div>
 
@@ -414,37 +364,3 @@ preview_artifact = Path(r"C:\Users\nguye\.gemini\antigravity\brain\dcbc4ce6-22e7
 if preview_artifact.parent.exists():
     preview_artifact.write_text(HTML_TEMPLATE, encoding="utf-8")
     print(f"Updated artifact {preview_artifact}")
-
-# Sync offline bundle into Android assets directory
-android_assets = ROOT / "android" / "app" / "src" / "main" / "assets"
-android_assets.mkdir(parents=True, exist_ok=True)
-(android_assets / "index.html").write_text(HTML_TEMPLATE, encoding="utf-8")
-for asset_name in ["manifest.webmanifest", "sw.js", "icon.svg"]:
-    src_f = ROOT / asset_name
-    if src_f.exists():
-        (android_assets / asset_name).write_bytes(src_f.read_bytes())
-print(f"Synced offline assets to {android_assets}")
-
-# Compile standalone Windows executable (VANG.exe) with embedded web assets
-csc_path = Path(r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe")
-launcher_cs = SRC / "Launcher.cs"
-exe_out = ROOT / "VANG.exe"
-
-if csc_path.exists() and launcher_cs.exists():
-    cmd = [
-        str(csc_path),
-        "/nologo",
-        "/optimize+",
-        "/target:winexe",
-        f"/out:{exe_out}",
-        f"/resource:{out_index},index.html",
-        f"/resource:{ROOT / 'manifest.webmanifest'},manifest.webmanifest",
-        f"/resource:{ROOT / 'sw.js'},sw.js",
-        f"/resource:{ROOT / 'icon.svg'},icon.svg",
-        str(launcher_cs),
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode == 0:
-        print(f"Compiled standalone desktop app: {exe_out} ({exe_out.stat().st_size} bytes)")
-    else:
-        print("CSC error:", res.stdout, res.stderr)

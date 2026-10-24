@@ -949,36 +949,6 @@ function closeDeviceModal() {
   if (m) m.hidden = true;
 }
 
-let deferredInstallPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-});
-
-function openInstallModal() {
-  const m = document.getElementById('install-modal');
-  if (m) m.hidden = false;
-}
-
-function closeInstallModal() {
-  const m = document.getElementById('install-modal');
-  if (m) m.hidden = true;
-}
-
-async function triggerPwaInstall() {
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
-    const choice = await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    if (choice && choice.outcome === 'accepted') {
-      showToast('Đã bắt đầu cài đặt ứng dụng VANG');
-      closeInstallModal();
-    }
-  } else {
-    showToast('Chọn Menu trình duyệt (⋮ hoặc Chia sẻ) → "Thêm vào màn hình chính"');
-  }
-}
-
 function renderDeviceList() {
   const box = document.getElementById('device-list');
   if (!box) return;
@@ -1462,8 +1432,6 @@ function initApp() {
   document.querySelectorAll('.js-close-spotify').forEach(b => (b.onclick = closeSpotifyModal));
   document.querySelectorAll('.js-open-devices').forEach(b => (b.onclick = openDeviceModal));
   document.querySelectorAll('.js-close-devices').forEach(b => (b.onclick = closeDeviceModal));
-  document.querySelectorAll('.js-open-install').forEach(b => (b.onclick = openInstallModal));
-  document.querySelectorAll('.js-close-install').forEach(b => (b.onclick = closeInstallModal));
 
   const btnCloseUpdate = document.getElementById('btn-close-update');
   if (btnCloseUpdate) {
@@ -1487,11 +1455,6 @@ function initApp() {
       }
     };
   });
-
-  const btnPwaInstall = document.getElementById('btn-pwa-install');
-  if (btnPwaInstall) {
-    btnPwaInstall.onclick = triggerPwaInstall;
-  }
 
   const btnConnectSp = document.getElementById('btn-connect-spotify');
   if (btnConnectSp) {
@@ -1552,7 +1515,6 @@ function initApp() {
     } else if (e.key === 'Escape') {
       closeSpotifyModal();
       closeDeviceModal();
-      closeInstallModal();
       closeMobileDrawers();
     }
   });

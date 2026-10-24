@@ -311,7 +311,6 @@ vm.runInContext(`
   Visualizer3D.setBounceGain(1.65);
   openPlaylist('pl-3');
   openDeviceModal();
-  openInstallModal();
 `, sandbox);
 assert.equal(storage.has('vang_spotify_token'), false, 'Zero-retention: localStorage must NEVER store tokens');
 assert.equal(storage.has('vang_spotify_client_id'), false, 'Zero-retention: localStorage must NEVER store client ID');
@@ -339,7 +338,7 @@ assert.equal(vm.runInContext('AppState.playing', sandbox), true, 'Spotify album 
 assert.ok(audioDestinationConnections >= 2, `AudioEngine must connect masterGain & silentSink to ctx.destination (got ${audioDestinationConnections})`);
 const sampled = vm.runInContext('AudioEngine.sampleBands(0.016, true, 1.0, 120, 10)', sandbox);
 assert.ok(sampled.bass > 0 && sampled.mid > 0, 'AudioEngine.sampleBands must produce live non-zero FFT energy when playing');
-assert.equal(getElById('install-modal').hidden, false);
+assert.equal(getElById('device-modal').hidden, false);
 console.log('[PASS] 08. Zero-retention security, WebAudio output routing, Demo & Spotify Album/Playlist playback verified');
 
 console.log('\n=== ALL 8 VERIFICATION SUITES PASSED 100% ===');
