@@ -14,6 +14,7 @@
   <link rel="apple-touch-icon" href="./icon.svg" />
     <style>
 :root {
+  --left-pane-w: 420px;
   --ink: #0E0D0B;
   --ink-elev: #161411;
   --paper: #ECE5D8;
@@ -271,7 +272,7 @@ html, body {
   height: 100vh;
   height: 100dvh;
   display: grid;
-  grid-template-columns: 280px 1fr 224px;
+  grid-template-columns: var(--left-pane-w, 420px) 1fr 224px;
   grid-template-rows: 52px 1fr 76px;
   background: transparent;
   position: relative;
@@ -342,7 +343,35 @@ html, body {
 }
 
 /* Left Panel: Queue & Library */
+/* Interactive Draggable Resizer for Left Pane */
+.pane-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  bottom: 0;
+  cursor: col-resize;
+  z-index: 30;
+  background: transparent;
+  transition: background 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pane-resizer:hover,
+.pane-resizer.dragging {
+  background: var(--acc);
+}
+
+@media (max-width: 900px) {
+  .pane-resizer {
+    display: none;
+  }
+}
+
 .left-pane {
+  position: relative;
+  min-width: 0;
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -1137,6 +1166,7 @@ html, body {
 
     <!-- LEFT PANE: LIBRARY & QUEUE -->
     <aside class="left-pane" aria-label="Thư viện và danh sách phát">
+      <div id="left-resizer" class="pane-resizer" title="Kéo để điều chỉnh độ rộng khung bài hát (nhấp đúp để đặt lại 420px)"></div>
       <nav class="nav-tabs" aria-label="Phân mục thư viện">
         <button class="word on" type="button" data-tab="queue">Danh sách</button>
         <button class="word" type="button" data-tab="liked">Yêu thích</button>
@@ -1164,8 +1194,8 @@ html, body {
           autocomplete="off"
         />
         <div class="search-source-bar">
-          <button id="src-pill-open" class="word mono on" type="button" title="Tìm trong 100M+ bài hát Web Mở miễn phí">🌐 Web Mở</button>
-          <button id="src-pill-spotify" class="word mono" type="button" title="Tìm trong danh mục bài hát Spotify">🟢 Spotify</button>
+          <button id="src-pill-open" class="word mono on" type="button" title="Tìm trong 100M+ bài hát Web Mở miễn phí">Web Mở</button>
+          <button id="src-pill-spotify" class="word mono" type="button" title="Tìm trong danh mục bài hát Spotify">Spotify</button>
         </div>
       </div>
 
@@ -1185,16 +1215,9 @@ html, body {
 
     <!-- RIGHT PANE: COMPACT ICON SELECTORS, 3D BOUNCE SLIDER & SIGNAL METERS -->
     <aside class="right-pane" aria-label="Cấu hình thị giác 3D và âm thanh">
-      <!-- 1. Unified 3D Visualizer Info & Bounce Gain -->
+      <!-- 1. Unified 3D Visualizer Bounce Gain -->
       <div class="sec-block">
         <div class="sec-hdr">
-          <span class="mono sec-label">Thị giác 3D</span>
-          <span class="mono acc" style="font-size:10.5px">Quỹ đạo Lăng kính</span>
-        </div>
-        <div style="font-size:11px;color:var(--dim);line-height:1.45">
-          Mô phỏng chấn tiêu sóng âm 3D đồng bộ trực tiếp theo nhịp điệu bài hát (kéo xoay 360° tự do).
-        </div>
-        <div class="sec-hdr" style="margin-top:6px">
           <span class="mono sec-label">Độ nảy sóng âm</span>
           <span class="mono acc js-bounce-val" style="font-size:10.5px">100%</span>
         </div>
@@ -1395,8 +1418,11 @@ html, body {
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">
-        <div>1. Mở <strong>developer.spotify.com/dashboard</strong> → chọn ứng dụng của bạn → mục <strong>Redirect URIs</strong> thêm địa chỉ:</div>
-        <div id="sp-redirect-uri" class="mono acc" style="padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:0;user-select:all;-webkit-user-select:all"></div>
+        <div>1. Mở trang <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer" style="color:var(--acc);text-decoration:underline;font-weight:600">developer.spotify.com/dashboard</a> → chọn ứng dụng của bạn → mục <strong>Redirect URIs</strong> thêm địa chỉ:</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <div id="sp-redirect-uri" class="mono acc" style="flex:1;padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:0;user-select:all;-webkit-user-select:all;overflow-x:auto;white-space:nowrap;font-size:11px"></div>
+          <button id="btn-copy-redirect-uri" class="word mono" type="button" style="height:32px;padding:0 10px;font-size:10.5px;flex-shrink:0" title="Sao chép link Redirect URI của trang này">Sao chép</button>
+        </div>
         <div>2. Dán mã <strong>Spotify Client ID</strong> vào ô dưới đây và bấm <strong>Đăng nhập Spotify</strong>:</div>
       </div>
 
@@ -1542,7 +1568,7 @@ const OpenMusicClient = (function () {
       id: 'curated-vpop',
       kind: 'playlist',
       source: 'open',
-      name: '🔥 V-Pop Thịnh Hành',
+      name: 'V-Pop Thịnh Hành',
       artist: 'Sơn Tùng M-TP, Đen, Vũ, MONO...',
       query: 'V-Pop hot hits',
       count: 40,
@@ -1553,7 +1579,7 @@ const OpenMusicClient = (function () {
       id: 'curated-weeknd',
       kind: 'playlist',
       source: 'open',
-      name: '🌟 The Weeknd: Tuyển Tập Hit',
+      name: 'The Weeknd: Tuyển Tập Hit',
       artist: 'The Weeknd · Blinding Lights, Starboy, Die For You, Save Your Tears...',
       query: 'The Weeknd',
       count: 45,
@@ -1564,7 +1590,7 @@ const OpenMusicClient = (function () {
       id: 'curated-global',
       kind: 'playlist',
       source: 'open',
-      name: '🌍 Top Hits Toàn Cầu',
+      name: 'Top Hits Toàn Cầu',
       artist: 'Taylor Swift, The Weeknd, Billie Eilish...',
       query: 'Taylor Swift The Weeknd Billie Eilish hits',
       count: 40,
@@ -1575,7 +1601,7 @@ const OpenMusicClient = (function () {
       id: 'curated-lofi',
       kind: 'playlist',
       source: 'open',
-      name: '☕ Lofi & Acoustic Chill',
+      name: 'Lofi & Acoustic Chill',
       artist: 'Gác Mái, Lofi Beats, Nhạc Thư Giãn...',
       query: 'lofi chill study beats',
       count: 35,
@@ -1586,7 +1612,7 @@ const OpenMusicClient = (function () {
       id: 'curated-edm',
       kind: 'playlist',
       source: 'open',
-      name: '⚡ Electronic & EDM Remix',
+      name: 'Electronic & EDM Remix',
       artist: 'Alan Walker, Martin Garrix, Avicii...',
       query: 'EDM festival hits',
       count: 40,
@@ -3609,7 +3635,10 @@ const TASK_ICONS = {
   shuffle: `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 4.5h3.2l5.6 7H14M14 4.5h-3.2l-2 2.5M12 2.5l2 2-2 2M12 9.5l2 2-2 2"/></svg>`,
   repeat: `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 5h9.5v3M10.5 3l2 2-2 2M13 11H3.5V8M5.5 13l-2-2 2-2"/></svg>`,
   vol: `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="2,6 5.5,6 9.5,2.5 9.5,13.5 5.5,10 2,10"/><path d="M11.8 5.2a4.2 4.2 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`,
-  mute: `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="2,6 5.5,6 9.5,2.5 9.5,13.5 5.5,10 2,10"/><path d="M11.5 6l3.5 4M15 6l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`
+  mute: `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="2,6 5.5,6 9.5,2.5 9.5,13.5 5.5,10 2,10"/><path d="M11.5 6l3.5 4M15 6l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`,
+  heartFilled: `<svg width="14" height="14" viewBox="0 0 16 16" fill="var(--acc)" aria-hidden="true"><path d="M8 13.5l-5.5-5.5a3.8 3.8 0 0 1 0-5.4 3.8 3.8 0 0 1 5.4 0L8 3.2l.1-.6a3.8 3.8 0 0 1 5.4 0 3.8 3.8 0 0 1 0 5.4L8 13.5z"/></svg>`,
+  heartOutline: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 13.5l-5.5-5.5a3.8 3.8 0 0 1 0-5.4 3.8 3.8 0 0 1 5.4 0L8 3.2l.1-.6a3.8 3.8 0 0 1 5.4 0 3.8 3.8 0 0 1 0 5.4L8 13.5z"/></svg>`,
+  heartFilledLg: `<svg width="34" height="34" viewBox="0 0 16 16" fill="#FFF" aria-hidden="true"><path d="M8 13.5l-5.5-5.5a3.8 3.8 0 0 1 0-5.4 3.8 3.8 0 0 1 5.4 0L8 3.2l.1-.6a3.8 3.8 0 0 1 5.4 0 3.8 3.8 0 0 1 0 5.4L8 13.5z"/></svg>`
 };
 
 const AppState = {
@@ -3787,7 +3816,7 @@ async function syncWakeLock(active) {
     } else {
       AppState.likedTracks.unshift(track);
       saveLikedTracks();
-      showToastMessage("Đã thêm vào Bài hát yêu thích ❤️");
+      showToastMessage("Đã thêm vào Bài hát yêu thích");
     }
     renderTrackList();
     updateLikeButtonsUI();
@@ -3797,8 +3826,9 @@ async function syncWakeLock(active) {
     const cur = currentTrack();
     const isLiked = cur && isTrackLiked(cur.id);
     document.querySelectorAll(".js-btn-like-current").forEach(btn => {
-      btn.innerHTML = isLiked ? "❤️" : "🤍";
+      btn.innerHTML = isLiked ? TASK_ICONS.heartFilled : TASK_ICONS.heartOutline;
       btn.title = isLiked ? "Bỏ yêu thích" : "Yêu thích";
+      btn.classList.toggle("on", Boolean(isLiked));
     });
   }
 
@@ -3876,7 +3906,7 @@ async function syncWakeLock(active) {
         '    <div class="qa truncate">' + (pl.tracks ? pl.tracks.length : 0) + ' bài</div>' +
         '  </div>' +
         '  <button class="word mono ' + (alreadyIn ? 'on' : '') + '" type="button" style="height:26px;font-size:10px">' +
-        '    ' + (alreadyIn ? 'Đã có ✓' : '+ Thêm') +
+        '    ' + (alreadyIn ? 'Đã có' : '+ Thêm') +
         '  </button>' +
         '</div>';
     }).join("");
@@ -3949,8 +3979,8 @@ function renderTrackList() {
     const likedCount = (AppState.likedTracks || []).length;
     dirHTML += ''
       + '<div class="qrow" data-open-liked="true" style="background:linear-gradient(135deg,rgba(100,50,220,0.22),rgba(var(--acc-rgb),0.12));margin-bottom:6px">' + nl
-      + '  <span class="mono dim">❤️</span>' + nl
-      + '  <div class="art" style="background:linear-gradient(135deg,#5B21B6,#9333EA);display:flex;align-items:center;justify-content:center;color:#FFF;font-size:15px">❤️</div>' + nl
+      + '  <span class="mono dim">00</span>' + nl
+      + '  <div class="art" style="background:linear-gradient(135deg,#5B21B6,#9333EA);display:flex;align-items:center;justify-content:center;color:#FFF">' + TASK_ICONS.heartFilled + '</div>' + nl
       + '  <div class="truncate">' + nl
       + '    <div class="qt truncate" style="color:var(--paper);font-weight:600">Bài hát yêu thích</div>' + nl
       + '    <div class="qa truncate">Danh sách tự động · ' + likedCount + ' bài</div>' + nl
@@ -4007,7 +4037,7 @@ function renderTrackList() {
     const col = isLikedTab ? {
       id: "liked-collection",
       name: "Bài hát yêu thích",
-      desc: "Toàn bộ các ca khúc bạn đã thả tim ❤️",
+      desc: "Toàn bộ các ca khúc trong danh sách yêu thích của bạn",
       cover: "",
       isLikedHeader: true
     } : AppState.openedCollection;
@@ -4015,7 +4045,7 @@ function renderTrackList() {
     const isCustom = col.source === "custom";
     const safeCover = escUrl(col.cover);
     const artCover = isLikedTab
-      ? '<div style="width:72px;height:72px;background:linear-gradient(135deg,#5B21B6,#9333EA);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">❤️</div>'
+      ? '<div style="width:72px;height:72px;background:linear-gradient(135deg,#5B21B6,#9333EA);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#FFF">' + TASK_ICONS.heartFilledLg + '</div>'
       : (safeCover ? '<div class="art" style="width:72px;height:72px;background-image:url(\'' + safeCover + '\');flex-shrink:0"></div>' : '<div style="width:72px;height:72px;background:linear-gradient(135deg,var(--acc),#221e1a);flex-shrink:0"></div>');
 
     const totalDurSec = list.reduce((acc, t) => acc + (Number(t.d) || 0), 0);
@@ -4034,8 +4064,8 @@ function renderTrackList() {
       '  </div>' +
       '  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px">' +
       '    <div style="display:flex;gap:6px">' +
-      '      <button id="btn-play-collection" class="word mono on" type="button" style="height:28px;padding:0 12px;font-size:11px">▶ Phát tất cả</button>' +
-      '      <button id="btn-shuffle-collection" class="word mono" type="button" style="height:28px;font-size:11px">🔀 Trộn bài</button>' +
+      '      <button id="btn-play-collection" class="word mono on" type="button" style="height:28px;padding:0 12px;font-size:11px">Phát tất cả</button>' +
+      '      <button id="btn-shuffle-collection" class="word mono" type="button" style="height:28px;font-size:11px">Trộn bài</button>' +
       '    </div>' +
       '    <div style="display:flex;gap:6px">' +
       '      ' + (isCustom ? '<button id="btn-del-custom-pl" class="word mono" type="button" style="height:28px;color:#EF4444;border-color:rgba(239,68,68,0.3)">Xóa</button>' : '') +
@@ -4070,8 +4100,8 @@ function renderTrackList() {
       ? `background-image:url('${safeCover}')`
       : `background:${tr.g || "linear-gradient(135deg,#D9822B,#2A2420)"}`;
     const sourceBadge = (tr.source === "open" || tr.isOpenSource || (tr.id && String(tr.id).startsWith("open-")))
-      ? '<span class="mono acc" style="font-size:8.5px;padding:0 2px;border:1px solid rgba(var(--acc-rgb),0.35);margin-right:4px">WEB</span>'
-      : (tr.localUrl ? '<span class="mono dim" style="font-size:8.5px;padding:0 2px;border:1px solid var(--line);margin-right:4px">MÁY</span>' : (tr.uri && tr.uri.startsWith('spotify:') ? '<span class="mono acc" style="font-size:8.5px;padding:0 2px;border:1px solid rgba(30,215,96,0.35);margin-right:4px;color:#1ed760">SPOTIFY</span>' : ''));
+      ? '<span class="mono acc" style="font-size:8.5px;padding:0 3px;border:1px solid rgba(var(--acc-rgb),0.35);margin-right:5px;flex-shrink:0;display:inline-block">WEB</span>'
+      : (tr.localUrl ? '<span class="mono dim" style="font-size:8.5px;padding:0 3px;border:1px solid var(--line);margin-right:5px;flex-shrink:0;display:inline-block">MÁY</span>' : (tr.uri && tr.uri.startsWith('spotify:') ? '<span class="mono acc" style="font-size:8.5px;padding:0 3px;border:1px solid rgba(30,215,96,0.35);margin-right:5px;color:#1ed760;flex-shrink:0;display:inline-block">SPOTIFY</span>' : ''));
 
     return '' +
       '<div class="qrow' + (isCur ? " cur" : "") + '" data-idx="' + i + '" style="grid-template-columns:22px 34px 1fr 42px 64px;gap:8px">' +
@@ -4083,8 +4113,8 @@ function renderTrackList() {
       '  </div>' +
       '  <span class="mono dim" style="text-align:right">' + fmtTime(tr.d) + '</span>' +
       '  <div style="display:flex;justify-content:flex-end;gap:4px">' +
-      '    <button class="icon-btn js-like-btn ' + (isLiked ? "on" : "") + '" data-tr-idx="' + i + '" type="button" title="' + (isLiked ? "Bỏ yêu thích" : "Yêu thích") + '" style="width:26px;height:26px;min-height:26px;font-size:12px;border:0;background:transparent">' +
-      '      ' + (isLiked ? "❤️" : "🤍") +
+      '    <button class="icon-btn js-like-btn ' + (isLiked ? "on" : "") + '" data-tr-idx="' + i + '" type="button" title="' + (isLiked ? "Bỏ yêu thích" : "Yêu thích") + '" style="width:26px;height:26px;min-height:26px;border:0;background:transparent;display:flex;align-items:center;justify-content:center">' +
+      '      ' + (isLiked ? TASK_ICONS.heartFilled : TASK_ICONS.heartOutline) +
       '    </button>' +
       '    <button class="icon-btn js-add-pl-btn" data-tr-idx="' + i + '" type="button" title="Thêm vào danh sách phát" style="width:26px;height:26px;min-height:26px;font-size:13px;border:0;background:transparent">' +
       '      + ' +
@@ -5470,6 +5500,95 @@ function initApp() {
       renderMetadata();
       closeSpotifyModal();
       showToast('Đã ngắt kết nối Spotify & xóa toàn bộ phiên RAM');
+    };
+  }
+
+  // Saved Left Pane Width Restoration
+  try {
+    const savedLeftW = localStorage.getItem('openmusic_left_pane_w');
+    if (savedLeftW && Number(savedLeftW) >= 320 && Number(savedLeftW) <= 700) {
+      document.documentElement.style.setProperty('--left-pane-w', `${Number(savedLeftW)}px`);
+    } else {
+      document.documentElement.style.setProperty('--left-pane-w', '420px');
+    }
+  } catch (e) {
+    document.documentElement.style.setProperty('--left-pane-w', '420px');
+  }
+
+  // Draggable Left Pane Resizer
+  const resizer = document.getElementById('left-resizer');
+  if (resizer) {
+    let isDraggingResizer = false;
+
+    const startResize = e => {
+      if (window.innerWidth <= 900) return;
+      isDraggingResizer = true;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      try { resizer.setPointerCapture(e.pointerId); } catch (err) {}
+    };
+
+    const doResize = e => {
+      if (!isDraggingResizer) return;
+      const clientX = e.clientX;
+      const minW = 320;
+      const maxW = Math.min(680, window.innerWidth - 380);
+      const newW = Math.max(minW, Math.min(clientX, maxW));
+      document.documentElement.style.setProperty('--left-pane-w', `${newW}px`);
+    };
+
+    const stopResize = e => {
+      if (!isDraggingResizer) return;
+      isDraggingResizer = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try { resizer.releasePointerCapture(e.pointerId); } catch (err) {}
+      const curW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--left-pane-w'), 10);
+      if (curW) {
+        try { localStorage.setItem('openmusic_left_pane_w', String(curW)); } catch (err) {}
+      }
+    };
+
+    resizer.addEventListener('pointerdown', startResize);
+    window.addEventListener('pointermove', doResize);
+    window.addEventListener('pointerup', stopResize);
+    window.addEventListener('pointercancel', stopResize);
+
+    // Also support mouse events for testing and older browsers
+    resizer.addEventListener('mousedown', startResize);
+    window.addEventListener('mousemove', doResize);
+    window.addEventListener('mouseup', stopResize);
+
+    resizer.addEventListener('dblclick', () => {
+      document.documentElement.style.setProperty('--left-pane-w', '420px');
+      try { localStorage.setItem('openmusic_left_pane_w', '420px'); } catch (err) {}
+      showToast('Đã đặt lại độ rộng khung bài hát về 420px');
+    });
+  }
+
+  // Copy Redirect URI Button in Spotify Modal
+  const btnCopyUri = document.getElementById('btn-copy-redirect-uri');
+  if (btnCopyUri) {
+    btnCopyUri.onclick = async () => {
+      const uri = SpotifyClient.getRedirectUri();
+      try {
+        await navigator.clipboard.writeText(uri);
+        btnCopyUri.textContent = 'Đã chép';
+        showToast('Đã sao chép link Redirect URI vào bộ nhớ đệm');
+        setTimeout(() => { btnCopyUri.textContent = 'Sao chép'; }, 2000);
+      } catch (err) {
+        const redirEl = document.getElementById('sp-redirect-uri');
+        if (redirEl) {
+          const range = document.createRange();
+          range.selectNodeContents(redirEl);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        showToast('Hãy bấm Ctrl+C để sao chép địa chỉ');
+      }
     };
   }
 

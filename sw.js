@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openmusic-pwa-v4';
+const CACHE_NAME = 'openmusic-pwa-v5';
 const ASSETS = [
   './',
   './index.html',
