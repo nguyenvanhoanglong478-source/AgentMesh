@@ -17,7 +17,6 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="referrer" content="no-referrer" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com https://*.mzstatic.com; media-src 'self' blob: data: https://*.scdn.co https://*.itunes.apple.com https://*.mzstatic.com; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.github.com https://itunes.apple.com https://*.itunes.apple.com;" />
   <meta name="theme-color" content="#0E0D0B" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -397,7 +396,9 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {{
   window.addEventListener('load', () => {{
-    navigator.serviceWorker.register('./sw.js').catch(() => {{}});
+    navigator.serviceWorker.register('./sw.js').then(reg => {{
+      try {{ reg.update(); }} catch (e) {{}}
+    }}).catch(() => {{}});
   }});
 }}
   </script>

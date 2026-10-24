@@ -10,7 +10,8 @@ const AudioEngine = (function () {
   let ctx = null;
   let analyser = null;
   let masterGain = null;
-  let silentAnalyserGain = null; // Allows analyzing reference audio without double-playing over Spotify
+  let refAudibleGain = null;
+  let silentSink = null;
   let captureStream = null;
   let captureSource = null;
   let fftData = null;
@@ -18,6 +19,7 @@ const AudioEngine = (function () {
   let sourceMode = 'auto'; // 'auto' | 'system' | 'mic'
   let volume = 0.72;
   let muted = false;
+  let spotifyDeviceAudible = false; // True when Spotify SDK/Connect is actively outputting sound
 
   // Real audio reference element for Spotify tracks (fetches real preview stream via CORS-enabled iTunes API)
   let refAudio = null;
@@ -62,12 +64,29 @@ const AudioEngine = (function () {
       masterGain = ctx.createGain();
       masterGain.gain.value = muted ? 0 : volume;
       masterGain.connect(analyser);
-      analyser.connect(ctx.destination);
+      masterGain.connect(ctx.destination);
 
-      // Secondary bus for silent FFT analysis when external Spotify device is outputting audio
-      silentAnalyserGain = ctx.createGain();
-      silentAnalyserGain.gain.value = 0.0;
-      analyser.connect(silentAnalyserGain);
+      refAudibleGain = ctx.createGain();
+      refAudibleGain.gain.value = 1.0;
+      refAudibleGain.connect(masterGain);
+
+      // Zero-gain sink connected to destination so browser always pulls FFT frames through analyser
+      silentSink = ctx.createGain();
+      silentSink.gain.value = 0.0;
+      analyser.connect(silentSink);
+      silentSink.connect(ctx.destination);
+
+      if (!refAudio) {
+        refAudio = new Audio();
+        refAudio.crossOrigin = 'anonymous';
+      }
+      if (!refMediaSource) {
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
+      }
     }
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
@@ -198,7 +217,8 @@ const AudioEngine = (function () {
       const bpm = (tr && tr.bpm) || 112;
       const ms = (60 / bpm / 4) * 1000; // 16th-note clock
       const isLocalFile = !!(tr && tr.localUrl);
-      if (isPlayingFn() && !isLocalFile && (!window.AppState || !window.AppState.spotifyActive)) {
+      const refIsPlaying = !!(refAudio && refAudio.src && !refAudio.paused && refAudio.readyState >= 2);
+      if (isPlayingFn() && !isLocalFile && !spotifyDeviceAudible && !refIsPlaying) {
         ensureContext();
         triggerDemoStep(tr, stepIdx++);
       }
@@ -220,15 +240,25 @@ const AudioEngine = (function () {
   async function syncTrackAudioProfile(track, isPlaying) {
     if (!track || !track.t) return;
     const trackKey = track.id || `${track.t}__${track.a}`;
+    const shouldPlayNow = () => Boolean(isPlaying || (window.AppState && window.AppState.playing));
+
     if (currentRefTrackId === trackKey) {
-      if (refAudio) {
-        if (isPlaying && refAudio.paused) refAudio.play().catch(() => {});
-        else if (!isPlaying && !refAudio.paused) refAudio.pause();
+      if (refAudio && refAudio.src) {
+        if (shouldPlayNow() && refAudio.paused) refAudio.play().catch(() => {});
+        else if (!shouldPlayNow() && !refAudio.paused) refAudio.pause();
       }
       return;
     }
     currentRefTrackId = trackKey;
     spotifyAnalysis = null;
+
+    if (refAudio) {
+      try {
+        refAudio.pause();
+        refAudio.removeAttribute('src');
+        refAudio.load();
+      } catch (e) {}
+    }
 
     // 0. If track is a Local Audio File (.mp3/.flac/.wav/.m4a) selected from device storage:
     if (track.localUrl) {
@@ -240,25 +270,30 @@ const AudioEngine = (function () {
       refAudio.loop = false;
       refAudio.src = track.localUrl;
       if (!refMediaSource && ctx) {
-        refMediaSource = ctx.createMediaElementSource(refAudio);
-        refMediaSource.connect(masterGain);
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
       }
-      if (ctx && analyser) {
-        try { analyser.disconnect(); } catch (e) {}
-        analyser.connect(ctx.destination);
-      }
+      if (refAudibleGain) refAudibleGain.gain.value = 1.0;
       refAudio.onloadedmetadata = () => {
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
         }
       };
       refAudio.volume = 1.0;
-      if (isPlaying) refAudio.play().catch(() => {});
+      if (shouldPlayNow()) refAudio.play().catch(() => {});
+      return;
+    }
+
+    // Built-in Demo tracks use the procedural multi-section DemoSynth directly
+    if (String(track.id || '').startsWith('demo-')) {
       return;
     }
 
     // 1. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
-    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id && !track.id.startsWith('demo-')) {
+    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id) {
       window.SpotifyClient.fetchAudioAnalysis(track.id).then(data => {
         if (data && currentRefTrackId === trackKey) {
           spotifyAnalysis = data;
@@ -269,8 +304,9 @@ const AudioEngine = (function () {
       }).catch(() => {});
     }
 
-    // 2. Fetch real audio preview stream from public CORS-enabled iTunes Search API
-    // so our WebAudio AnalyserNode gets real vocal/drum/bass FFT for the exact song!
+    // 2. Fetch real audio stream from public CORS-enabled iTunes Search API
+    // - Feeds 100% real vocal/drum/bass FFT into analyser
+    // - Also outputs audible music automatically if Spotify device playback isn't active/available!
     try {
       const q = encodeURIComponent(`${track.t} ${track.a}`.trim());
       const resp = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
@@ -283,28 +319,33 @@ const AudioEngine = (function () {
       if (!refAudio) {
         refAudio = new Audio();
         refAudio.crossOrigin = 'anonymous';
-        refAudio.loop = true;
       }
+      refAudio.loop = true;
       refAudio.src = item.previewUrl;
-      // Mute audible output when Spotify is already playing the audio, while still feeding the FFT analyser!
-      // Wait: MediaElementSource feeds whatever element volume is set to, so we connect refMediaSource -> analyser
-      // and do NOT connect refMediaSource to ctx.destination when Spotify is playing!
       if (!refMediaSource && ctx) {
-        refMediaSource = ctx.createMediaElementSource(refAudio);
-        refMediaSource.connect(analyser);
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
       }
-      // Disconnect analyser -> destination ONLY if Spotify is playing its own audio, so there is no echo
-      if (ctx && analyser) {
-        try { analyser.disconnect(); } catch (e) {}
-        if (!window.AppState || !window.AppState.spotifyActive) {
-          analyser.connect(ctx.destination);
-        }
+      if (refAudibleGain) {
+        refAudibleGain.gain.value = spotifyDeviceAudible ? 0.0 : 1.0;
       }
-      refAudio.volume = 0.85;
-      if (isPlaying) {
+      refAudio.volume = 1.0;
+      if (shouldPlayNow()) {
         refAudio.play().catch(() => {});
       }
     } catch (e) {}
+  }
+
+  function setSpotifyDeviceAudible(isAudible) {
+    spotifyDeviceAudible = !!isAudible;
+    if (refAudibleGain && ctx) {
+      const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
+      const isLocal = !!(tr && tr.localUrl);
+      refAudibleGain.gain.setValueAtTime((spotifyDeviceAudible && !isLocal) ? 0.0 : 1.0, ctx.currentTime);
+    }
   }
 
   function setReferencePlaying(isPlaying) {
@@ -572,6 +613,7 @@ const AudioEngine = (function () {
     stopDemoSynth,
     syncTrackAudioProfile,
     setReferencePlaying,
+    setSpotifyDeviceAudible,
     seekLocalAudio,
     setSourceMode,
     toggleMicInput,

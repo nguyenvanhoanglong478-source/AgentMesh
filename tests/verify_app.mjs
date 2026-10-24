@@ -10,7 +10,7 @@ const swCode = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 // 1. Verify HTML & Security Headers
 assert.ok(html.includes('id="main-stage"'), 'HTML must contain #main-stage');
-assert.ok(html.includes('http-equiv="Content-Security-Policy"'), 'HTML must enforce strict CSP');
+assert.ok(!html.includes('http-equiv="Content-Security-Policy"'), 'HTML must not include restrictive CSP meta tag that blocks Spotify Web Playback SDK iframe');
 assert.ok(html.includes('name="referrer" content="no-referrer"'), 'HTML must enforce no-referrer');
 assert.ok(!html.includes('TÍN HIỆU THỜI GIAN THỰC · FFT'), 'Unnecessary HUD text must be removed');
 assert.ok(!html.includes('60 FPS · 3D AUDIO STAGE'), 'Unnecessary topbar text must be removed');
@@ -18,7 +18,7 @@ assert.ok(html.includes('id="bounce-slider"'), 'HTML must contain 3D bounce inte
 assert.ok(html.includes('class="icon-btn js-vmode on"'), '3D modes must use compact icon buttons');
 assert.ok(html.includes('class="icon-btn js-src-mode on"'), 'Audio sources must use compact icon buttons');
 assert.ok(html.includes('class="ctl-btn play-btn js-play"'), 'HTML must contain Play geometric button');
-console.log('[PASS] 01. Security CSP/no-referrer, compact icon buttons, 3D bounce slider & clean HUD verified');
+console.log('[PASS] 01. Spotify SDK compatibility, no-referrer, compact icon buttons, 3D bounce slider & clean HUD verified');
 
 // 2. Verify PWA Manifest & Service Worker
 assert.equal(manifest.short_name, 'VANG');
@@ -115,6 +115,80 @@ function queryAll(sel) {
 
 const storage = new Map();
 const sessStorage = new Map();
+let audioDestinationConnections = 0;
+let audioElementPlayCalls = 0;
+
+class MockAudioNode {
+  constructor(name = 'node') {
+    this.name = name;
+    this.gain = {
+      value: 1,
+      setValueAtTime() {},
+      linearRampToValueAtTime() {},
+      exponentialRampToValueAtTime() {}
+    };
+    this.frequency = {
+      value: 440,
+      setValueAtTime() {},
+      exponentialRampToValueAtTime() {}
+    };
+    this.Q = { value: 1 };
+    this.fftSize = 1024;
+    this.frequencyBinCount = 512;
+  }
+  connect(target) {
+    if (target && target.name === 'destination') {
+      audioDestinationConnections++;
+    }
+    return target;
+  }
+  disconnect() {}
+  start() {}
+  stop() {}
+  getByteFrequencyData(arr) {
+    for (let i = 0; i < arr.length; i++) arr[i] = 160;
+  }
+  getByteTimeDomainData(arr) {
+    for (let i = 0; i < arr.length; i++) arr[i] = 128 + ((i % 2 === 0) ? 40 : -40);
+  }
+}
+
+class MockAudioContext {
+  constructor() {
+    this.state = 'running';
+    this.currentTime = 0;
+    this.sampleRate = 44100;
+    this.destination = new MockAudioNode('destination');
+  }
+  resume() { this.state = 'running'; return Promise.resolve(); }
+  createAnalyser() { return new MockAudioNode('analyser'); }
+  createGain() { return new MockAudioNode('gain'); }
+  createOscillator() { return new MockAudioNode('osc'); }
+  createBiquadFilter() { return new MockAudioNode('filter'); }
+  createBuffer(_ch, len) {
+    return { getChannelData: () => new Float32Array(len) };
+  }
+  createBufferSource() { return new MockAudioNode('bufferSource'); }
+  createMediaElementSource() { return new MockAudioNode('mediaElementSource'); }
+}
+
+class MockAudio {
+  constructor() {
+    this.src = '';
+    this.paused = true;
+    this.volume = 1;
+    this.readyState = 4;
+  }
+  play() {
+    this.paused = false;
+    audioElementPlayCalls++;
+    return Promise.resolve();
+  }
+  pause() { this.paused = true; }
+  removeAttribute(k) { if (k === 'src') this.src = ''; }
+  load() {}
+}
+
 const sandbox = {
   console,
   Math,
@@ -128,6 +202,8 @@ const sandbox = {
   Boolean,
   Promise,
   URLSearchParams,
+  AudioContext: MockAudioContext,
+  Audio: MockAudio,
   setTimeout: (fn, ms) => { if (ms === 280) fn(); return 1; },
   clearTimeout: () => {},
   setInterval: () => 1,
@@ -229,11 +305,11 @@ const searchHTML = getElById('track-list').innerHTML;
 assert.ok(searchHTML.includes('Mưa Phố Cũ'), 'Search filter should find matching album/track');
 console.log('[PASS] 07. Library tabs (Queue, Liked, Playlists, Recent, Search) verified');
 
-// 7. Verify Zero-Retention Security, Playlist/Album Opening, 3D Bounce Slider & Install Modal
+// 7. Verify Zero-Retention Security, Playlist/Album Opening, 3D Bounce Slider & Audio Playback
 vm.runInContext(`
   SpotifyClient.setClientId('test_spotify_client_123');
   Visualizer3D.setBounceGain(1.65);
-  openPlaylist('pl-2');
+  openPlaylist('pl-3');
   openDeviceModal();
   openInstallModal();
 `, sandbox);
@@ -244,7 +320,26 @@ function SpotifyClient_check() {
   return vm.runInContext('Visualizer3D.getBounceGain()', sandbox);
 }
 assert.ok(getElById('track-list').innerHTML.includes('Ambient &amp; Modular'), 'Opening album/playlist must render its tracks and header');
+assert.equal(vm.runInContext('AppState.playing', sandbox), true, 'Opening an album must immediately start playback');
+assert.equal(queryAll('.js-title')[0].textContent, 'Salt & Static', 'Opening pl-3 must immediately load and play its first track');
+
+// 8. Verify Spotify Mode Album Derivation & Instant Album Playback
+vm.runInContext(`
+  AppState.spotifyActive = true;
+  AppState.allTracks = [
+    { id: 'sp-1', uri: 'spotify:track:1', t: 'Bản Nhạc Số 1', a: 'Ca Sĩ A', al: 'Album Bầu Trời Đêm', albumId: 'alb-sky-1', d: 200, c: [217, 130, 43] },
+    { id: 'sp-2', uri: 'spotify:track:2', t: 'Bản Nhạc Số 2', a: 'Ca Sĩ A', al: 'Album Bầu Trời Đêm', albumId: 'alb-sky-1', d: 215, c: [217, 130, 43] }
+  ];
+  AppState.playlists = mergeCollections([], buildLibraryAlbums(AppState.allTracks));
+  openPlaylist('alb-sky-1');
+`, sandbox);
+assert.equal(vm.runInContext('AppState.tracks.length', sandbox), 2, 'Opening derived Spotify library album must load its tracks immediately');
+assert.equal(queryAll('.js-title')[0].textContent, 'Bản Nhạc Số 1', 'Opening Spotify album must immediately select and play track 0');
+assert.equal(vm.runInContext('AppState.playing', sandbox), true, 'Spotify album must be in playing state');
+assert.ok(audioDestinationConnections >= 2, `AudioEngine must connect masterGain & silentSink to ctx.destination (got ${audioDestinationConnections})`);
+const sampled = vm.runInContext('AudioEngine.sampleBands(0.016, true, 1.0, 120, 10)', sandbox);
+assert.ok(sampled.bass > 0 && sampled.mid > 0, 'AudioEngine.sampleBands must produce live non-zero FFT energy when playing');
 assert.equal(getElById('install-modal').hidden, false);
-console.log('[PASS] 08. Zero-retention security, Album/Playlist opening, 3D Bounce Gain & Install Modal verified');
+console.log('[PASS] 08. Zero-retention security, WebAudio output routing, Demo & Spotify Album/Playlist playback verified');
 
 console.log('\n=== ALL 8 VERIFICATION SUITES PASSED 100% ===');

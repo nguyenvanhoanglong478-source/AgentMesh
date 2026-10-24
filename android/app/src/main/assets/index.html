@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="referrer" content="no-referrer" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com https://*.mzstatic.com; media-src 'self' blob: data: https://*.scdn.co https://*.itunes.apple.com https://*.mzstatic.com; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.github.com https://itunes.apple.com https://*.itunes.apple.com;" />
   <meta name="theme-color" content="#0E0D0B" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -1330,7 +1329,8 @@ const AudioEngine = (function () {
   let ctx = null;
   let analyser = null;
   let masterGain = null;
-  let silentAnalyserGain = null; // Allows analyzing reference audio without double-playing over Spotify
+  let refAudibleGain = null;
+  let silentSink = null;
   let captureStream = null;
   let captureSource = null;
   let fftData = null;
@@ -1338,6 +1338,7 @@ const AudioEngine = (function () {
   let sourceMode = 'auto'; // 'auto' | 'system' | 'mic'
   let volume = 0.72;
   let muted = false;
+  let spotifyDeviceAudible = false; // True when Spotify SDK/Connect is actively outputting sound
 
   // Real audio reference element for Spotify tracks (fetches real preview stream via CORS-enabled iTunes API)
   let refAudio = null;
@@ -1382,12 +1383,29 @@ const AudioEngine = (function () {
       masterGain = ctx.createGain();
       masterGain.gain.value = muted ? 0 : volume;
       masterGain.connect(analyser);
-      analyser.connect(ctx.destination);
+      masterGain.connect(ctx.destination);
 
-      // Secondary bus for silent FFT analysis when external Spotify device is outputting audio
-      silentAnalyserGain = ctx.createGain();
-      silentAnalyserGain.gain.value = 0.0;
-      analyser.connect(silentAnalyserGain);
+      refAudibleGain = ctx.createGain();
+      refAudibleGain.gain.value = 1.0;
+      refAudibleGain.connect(masterGain);
+
+      // Zero-gain sink connected to destination so browser always pulls FFT frames through analyser
+      silentSink = ctx.createGain();
+      silentSink.gain.value = 0.0;
+      analyser.connect(silentSink);
+      silentSink.connect(ctx.destination);
+
+      if (!refAudio) {
+        refAudio = new Audio();
+        refAudio.crossOrigin = 'anonymous';
+      }
+      if (!refMediaSource) {
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
+      }
     }
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
@@ -1518,7 +1536,8 @@ const AudioEngine = (function () {
       const bpm = (tr && tr.bpm) || 112;
       const ms = (60 / bpm / 4) * 1000; // 16th-note clock
       const isLocalFile = !!(tr && tr.localUrl);
-      if (isPlayingFn() && !isLocalFile && (!window.AppState || !window.AppState.spotifyActive)) {
+      const refIsPlaying = !!(refAudio && refAudio.src && !refAudio.paused && refAudio.readyState >= 2);
+      if (isPlayingFn() && !isLocalFile && !spotifyDeviceAudible && !refIsPlaying) {
         ensureContext();
         triggerDemoStep(tr, stepIdx++);
       }
@@ -1540,15 +1559,25 @@ const AudioEngine = (function () {
   async function syncTrackAudioProfile(track, isPlaying) {
     if (!track || !track.t) return;
     const trackKey = track.id || `${track.t}__${track.a}`;
+    const shouldPlayNow = () => Boolean(isPlaying || (window.AppState && window.AppState.playing));
+
     if (currentRefTrackId === trackKey) {
-      if (refAudio) {
-        if (isPlaying && refAudio.paused) refAudio.play().catch(() => {});
-        else if (!isPlaying && !refAudio.paused) refAudio.pause();
+      if (refAudio && refAudio.src) {
+        if (shouldPlayNow() && refAudio.paused) refAudio.play().catch(() => {});
+        else if (!shouldPlayNow() && !refAudio.paused) refAudio.pause();
       }
       return;
     }
     currentRefTrackId = trackKey;
     spotifyAnalysis = null;
+
+    if (refAudio) {
+      try {
+        refAudio.pause();
+        refAudio.removeAttribute('src');
+        refAudio.load();
+      } catch (e) {}
+    }
 
     // 0. If track is a Local Audio File (.mp3/.flac/.wav/.m4a) selected from device storage:
     if (track.localUrl) {
@@ -1560,25 +1589,30 @@ const AudioEngine = (function () {
       refAudio.loop = false;
       refAudio.src = track.localUrl;
       if (!refMediaSource && ctx) {
-        refMediaSource = ctx.createMediaElementSource(refAudio);
-        refMediaSource.connect(masterGain);
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
       }
-      if (ctx && analyser) {
-        try { analyser.disconnect(); } catch (e) {}
-        analyser.connect(ctx.destination);
-      }
+      if (refAudibleGain) refAudibleGain.gain.value = 1.0;
       refAudio.onloadedmetadata = () => {
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
         }
       };
       refAudio.volume = 1.0;
-      if (isPlaying) refAudio.play().catch(() => {});
+      if (shouldPlayNow()) refAudio.play().catch(() => {});
+      return;
+    }
+
+    // Built-in Demo tracks use the procedural multi-section DemoSynth directly
+    if (String(track.id || '').startsWith('demo-')) {
       return;
     }
 
     // 1. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
-    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id && !track.id.startsWith('demo-')) {
+    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id) {
       window.SpotifyClient.fetchAudioAnalysis(track.id).then(data => {
         if (data && currentRefTrackId === trackKey) {
           spotifyAnalysis = data;
@@ -1589,8 +1623,9 @@ const AudioEngine = (function () {
       }).catch(() => {});
     }
 
-    // 2. Fetch real audio preview stream from public CORS-enabled iTunes Search API
-    // so our WebAudio AnalyserNode gets real vocal/drum/bass FFT for the exact song!
+    // 2. Fetch real audio stream from public CORS-enabled iTunes Search API
+    // - Feeds 100% real vocal/drum/bass FFT into analyser
+    // - Also outputs audible music automatically if Spotify device playback isn't active/available!
     try {
       const q = encodeURIComponent(`${track.t} ${track.a}`.trim());
       const resp = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
@@ -1603,28 +1638,33 @@ const AudioEngine = (function () {
       if (!refAudio) {
         refAudio = new Audio();
         refAudio.crossOrigin = 'anonymous';
-        refAudio.loop = true;
       }
+      refAudio.loop = true;
       refAudio.src = item.previewUrl;
-      // Mute audible output when Spotify is already playing the audio, while still feeding the FFT analyser!
-      // Wait: MediaElementSource feeds whatever element volume is set to, so we connect refMediaSource -> analyser
-      // and do NOT connect refMediaSource to ctx.destination when Spotify is playing!
       if (!refMediaSource && ctx) {
-        refMediaSource = ctx.createMediaElementSource(refAudio);
-        refMediaSource.connect(analyser);
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
       }
-      // Disconnect analyser -> destination ONLY if Spotify is playing its own audio, so there is no echo
-      if (ctx && analyser) {
-        try { analyser.disconnect(); } catch (e) {}
-        if (!window.AppState || !window.AppState.spotifyActive) {
-          analyser.connect(ctx.destination);
-        }
+      if (refAudibleGain) {
+        refAudibleGain.gain.value = spotifyDeviceAudible ? 0.0 : 1.0;
       }
-      refAudio.volume = 0.85;
-      if (isPlaying) {
+      refAudio.volume = 1.0;
+      if (shouldPlayNow()) {
         refAudio.play().catch(() => {});
       }
     } catch (e) {}
+  }
+
+  function setSpotifyDeviceAudible(isAudible) {
+    spotifyDeviceAudible = !!isAudible;
+    if (refAudibleGain && ctx) {
+      const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
+      const isLocal = !!(tr && tr.localUrl);
+      refAudibleGain.gain.setValueAtTime((spotifyDeviceAudible && !isLocal) ? 0.0 : 1.0, ctx.currentTime);
+    }
   }
 
   function setReferencePlaying(isPlaying) {
@@ -1892,6 +1932,7 @@ const AudioEngine = (function () {
     stopDemoSynth,
     syncTrackAudioProfile,
     setReferencePlaying,
+    setSpotifyDeviceAudible,
     seekLocalAudio,
     setSourceMode,
     toggleMicInput,
@@ -2403,6 +2444,7 @@ const Visualizer3D = (function () {
 
 const SpotifyClient = (function () {
   const LS_CLIENT_ID = 'vang_spotify_client_id';
+  const SS_TOKEN = 'vang_spotify_session_token';
   const SS_VERIFIER = 'vang_pkce_verifier';
   const SS_STATE = 'vang_pkce_state';
   const SS_TEMP_CID = 'vang_pkce_cid';
@@ -2421,16 +2463,24 @@ const SpotifyClient = (function () {
     'playlist-read-collaborative'
   ].join(' ');
 
-  // Volatile in-memory token store (NEVER written to localStorage or cookies)
   let memoryToken = null;
   let memoryClientId = '';
   let sdkPlayer = null;
   let webDeviceId = null;
 
-  // Purge any legacy tokens from older versions so zero user data remains in localStorage
+  // Migrate any existing active session into sessionStorage so page refresh doesn't break audio playback
   try {
-    localStorage.removeItem('vang_spotify_token');
-    localStorage.removeItem('vang_spotify_verifier');
+    const existing = sessionStorage.getItem(SS_TOKEN) || localStorage.getItem('vang_spotify_token');
+    if (existing) {
+      memoryToken = JSON.parse(existing);
+      sessionStorage.setItem(SS_TOKEN, existing);
+      localStorage.removeItem('vang_spotify_token');
+    }
+    const existingCid = sessionStorage.getItem(SS_TEMP_CID) || localStorage.getItem(LS_CLIENT_ID);
+    if (existingCid) {
+      memoryClientId = existingCid.trim();
+      sessionStorage.setItem(SS_TEMP_CID, memoryClientId);
+    }
   } catch (e) {}
 
   function getClientId() {
@@ -2465,12 +2515,16 @@ const SpotifyClient = (function () {
       refresh_token: res.refresh_token || prev.refresh_token || null,
       expires_at: Date.now() + (res.expires_in || 3600) * 1000 - 60000
     };
+    try {
+      sessionStorage.setItem(SS_TOKEN, JSON.stringify(memoryToken));
+    } catch (e) {}
     return memoryToken;
   }
 
   function logout() {
     memoryToken = null;
     try {
+      sessionStorage.removeItem(SS_TOKEN);
       sessionStorage.removeItem(SS_VERIFIER);
       sessionStorage.removeItem(SS_STATE);
       localStorage.removeItem('vang_spotify_token');
@@ -2685,6 +2739,8 @@ const SpotifyClient = (function () {
       t: String(t.name || 'Không rõ tên'),
       a: (t.artists || []).map(x => x && x.name).filter(Boolean).join(', ') || (fallbackAlbum && fallbackAlbum.artistName) || 'Nghệ sĩ',
       al: String(albumObj.name || 'Spotify'),
+      albumId: albumObj.id || '',
+      albumUri: albumObj.uri || (albumObj.id ? `spotify:album:${albumObj.id}` : ''),
       d: Math.max(1, Math.round((t.duration_ms || 180000) / 1000)),
       cover: safeCover,
       c: [217, 130, 43],
@@ -2855,16 +2911,36 @@ const SpotifyClient = (function () {
     return all;
   }
 
-  // Robustly fetch tracks for any Playlist OR Album (handles market=from_token, /playlists/{id} fallback, and /albums/{id}/tracks)
-  async function fetchPlaylistTracks(collectionId, maxItems = 500, onProgress = null, kind = 'playlist', preloaded = null) {
+  // Robustly fetch tracks for any Playlist OR Album
+  async function fetchPlaylistTracks(collectionId, maxItems = 500, onProgress = null, kind = 'playlist', preloaded = null, collectionName = '') {
     if (Array.isArray(preloaded) && preloaded.length > 0) {
       if (onProgress) onProgress(preloaded.slice());
+      // If it's a Spotify album with only 1-2 library tracks preloaded, try fetching the full album tracklist
+      if (kind === 'album' && collectionId && !String(collectionId).startsWith('lib-alb-') && !String(collectionId).startsWith('pl-') && preloaded.length < 3) {
+        try {
+          const albData = await api(`/albums/${encodeURIComponent(collectionId)}`).catch(() => null);
+          if (albData && albData.tracks && albData.tracks.items && albData.tracks.items.length > preloaded.length) {
+            const fallbackMeta = {
+              name: albData.name,
+              images: albData.images,
+              artistName: (albData.artists || []).map(a => a && a.name).filter(Boolean).join(', ')
+            };
+            const fullMapped = albData.tracks.items.map(tr => mapSpotifyTrack(tr, fallbackMeta)).filter(Boolean);
+            if (fullMapped.length) {
+              if (onProgress) onProgress(fullMapped);
+              return dedupeTracks(fullMapped);
+            }
+          }
+        } catch (e) {}
+      }
       return preloaded.slice();
     }
 
     // 1. If it's an Album, fetch /albums/{id} & /albums/{id}/tracks
-    if (kind === 'album') {
-      const albData = await api(`/albums/${encodeURIComponent(collectionId)}?market=from_token`).catch(() => null);
+    if (kind === 'album' && collectionId && !String(collectionId).startsWith('lib-alb-')) {
+      const albData = await api(`/albums/${encodeURIComponent(collectionId)}`).catch(() =>
+        api(`/albums/${encodeURIComponent(collectionId)}?market=from_token`).catch(() => null)
+      );
       if (albData) {
         const fallbackMeta = {
           name: albData.name,
@@ -2876,15 +2952,24 @@ const SpotifyClient = (function () {
         if (onProgress && mapped.length) onProgress(mapped);
         if (mapped.length) return dedupeTracks(mapped);
       }
+      const albTracksData = await api(`/albums/${encodeURIComponent(collectionId)}/tracks?limit=50`).catch(() => null);
+      if (albTracksData && albTracksData.items) {
+        const mapped = albTracksData.items.map(tr => mapSpotifyTrack(tr)).filter(Boolean);
+        if (onProgress && mapped.length) onProgress(mapped);
+        if (mapped.length) return dedupeTracks(mapped);
+      }
     }
 
-    // 2. Try paginated /playlists/{id}/tracks?market=from_token
+    // 2. Try paginated /playlists/{id}/tracks (first without market param, then with market=from_token)
     const all = [];
     let offset = 0;
     const limit = 100;
     try {
       while (offset < maxItems) {
-        const data = await api(`/playlists/${encodeURIComponent(collectionId)}/tracks?market=from_token&limit=${limit}&offset=${offset}`);
+        let data = await api(`/playlists/${encodeURIComponent(collectionId)}/tracks?limit=${limit}&offset=${offset}`).catch(() => null);
+        if (!data) {
+          data = await api(`/playlists/${encodeURIComponent(collectionId)}/tracks?market=from_token&limit=${limit}&offset=${offset}`).catch(() => null);
+        }
         const items = (data && (data.items || (data.tracks && data.tracks.items))) || [];
         if (!items.length) break;
         const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
@@ -2897,9 +2982,11 @@ const SpotifyClient = (function () {
 
     if (all.length > 0) return dedupeTracks(all);
 
-    // 3. Fallback: GET /playlists/{id}?market=from_token (works even when /tracks sub-endpoint is restricted)
+    // 3. Fallback: GET /playlists/{id}
     try {
-      const fullPl = await api(`/playlists/${encodeURIComponent(collectionId)}?market=from_token`);
+      const fullPl = await api(`/playlists/${encodeURIComponent(collectionId)}`).catch(() =>
+        api(`/playlists/${encodeURIComponent(collectionId)}?market=from_token`).catch(() => null)
+      );
       const items =
         (fullPl && fullPl.tracks && fullPl.tracks.items) ||
         (fullPl && fullPl.items && fullPl.items.items) ||
@@ -2911,7 +2998,7 @@ const SpotifyClient = (function () {
 
     // 4. Fallback: maybe collectionId is an album ID
     try {
-      const albData = await api(`/albums/${encodeURIComponent(collectionId)}?market=from_token`);
+      const albData = await api(`/albums/${encodeURIComponent(collectionId)}`);
       if (albData && albData.tracks && albData.tracks.items) {
         const fallbackMeta = {
           name: albData.name,
@@ -2920,23 +3007,78 @@ const SpotifyClient = (function () {
         };
         const mapped = albData.tracks.items.map(tr => mapSpotifyTrack(tr, fallbackMeta)).filter(Boolean);
         if (onProgress && mapped.length) onProgress(mapped);
-        return dedupeTracks(mapped);
+        if (mapped.length > 0) return dedupeTracks(mapped);
       }
     } catch (e) {}
+
+    // 5. Fallback for Spotify Dev Mode restricted editorial/algorithmic playlists (e.g. Daily Mix / Top 50):
+    // Search tracks matching the collection name so the playlist always opens and plays!
+    if (collectionName && String(collectionName).trim()) {
+      try {
+        const searched = await searchTracks(String(collectionName).trim(), 0);
+        if (searched && searched.length > 0) {
+          if (onProgress) onProgress(searched);
+          return dedupeTracks(searched);
+        }
+      } catch (e) {}
+    }
 
     return [];
   }
 
-  // Play a Playlist or Album directly via Spotify context_uri (works even on restricted algorithmic playlists)
+  // Helper to execute play request reliably across Web Playback SDK or active Connect devices
+  async function executePlayPayload(payload, preferredDeviceId = null) {
+    if (sdkPlayer && typeof sdkPlayer.activateElement === 'function') {
+      try { await sdkPlayer.activateElement(); } catch (e) {}
+    }
+    const targetId = preferredDeviceId || webDeviceId;
+    const q = targetId ? `?device_id=${encodeURIComponent(targetId)}` : '';
+    try {
+      await api('/me/player/play' + q, {
+        method: 'PUT',
+        body: payload ? JSON.stringify(payload) : undefined
+      });
+      return true;
+    } catch (err) {
+      // Fallback 1: Try without device_id (uses currently active Spotify device on PC/Phone)
+      if (targetId) {
+        try {
+          await api('/me/player/play', {
+            method: 'PUT',
+            body: payload ? JSON.stringify(payload) : undefined
+          });
+          return true;
+        } catch (err2) {}
+      }
+      // Fallback 2: Discover available devices and play on the first available one
+      try {
+        const devs = await fetchDevices();
+        const dev = devs.find(d => d.is_active) || devs[0];
+        if (dev && dev.id) {
+          await api(`/me/player/play?device_id=${encodeURIComponent(dev.id)}`, {
+            method: 'PUT',
+            body: payload ? JSON.stringify(payload) : undefined
+          });
+          return true;
+        }
+      } catch (err3) {}
+
+      // Fallback 3: Ensure AudioEngine's direct audio output is audible
+      if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+        window.AudioEngine.setSpotifyDeviceAudible(false);
+      }
+      return false;
+    }
+  }
+
   async function playContextUri(contextUri, offsetIndex = 0, deviceId = null) {
-    const q = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
-    return api('/me/player/play' + q, {
-      method: 'PUT',
-      body: JSON.stringify({
+    return executePlayPayload(
+      {
         context_uri: contextUri,
         offset: { position: offsetIndex }
-      })
-    });
+      },
+      deviceId
+    );
   }
 
   async function searchTracks(query, offset = 0) {
@@ -2959,22 +3101,38 @@ const SpotifyClient = (function () {
   }
 
   async function playUris(uris, offsetIndex = 0, deviceId = null) {
-    const q = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
-    return api('/me/player/play' + q, {
-      method: 'PUT',
-      body: JSON.stringify({
+    return executePlayPayload(
+      {
         uris,
         offset: { position: offsetIndex }
-      })
-    });
+      },
+      deviceId
+    );
   }
 
   async function pausePlayback() {
-    return api('/me/player/pause', { method: 'PUT' });
+    if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+      window.AudioEngine.setSpotifyDeviceAudible(false);
+    }
+    if (sdkPlayer && typeof sdkPlayer.pause === 'function' && webDeviceId) {
+      try { await sdkPlayer.pause(); } catch (e) {}
+    }
+    return api('/me/player/pause', { method: 'PUT' }).catch(() => null);
   }
 
-  async function resumePlayback() {
-    return api('/me/player/play', { method: 'PUT' });
+  async function resumePlayback(fallbackUris = null, fallbackOffset = 0, positionMs = 0) {
+    const ok = await executePlayPayload(null, webDeviceId);
+    if (!ok && Array.isArray(fallbackUris) && fallbackUris.length > 0) {
+      return executePlayPayload(
+        {
+          uris: fallbackUris,
+          offset: { position: fallbackOffset },
+          position_ms: Math.max(0, Math.round(positionMs || 0))
+        },
+        webDeviceId
+      );
+    }
+    return ok;
   }
 
   async function nextTrack() {
@@ -2990,37 +3148,70 @@ const SpotifyClient = (function () {
   }
 
   async function setRemoteVolume(pct) {
+    if (sdkPlayer && typeof sdkPlayer.setVolume === 'function') {
+      try { sdkPlayer.setVolume(Math.max(0, Math.min(1, pct / 100))); } catch (e) {}
+    }
     return api(`/me/player/volume?volume_percent=${Math.round(pct)}`, { method: 'PUT' });
   }
 
   function initWebPlaybackSDK(onStateChange, onReadyDevice) {
     ensureValidToken().then(token => {
       if (!token) return;
-      if (!document.getElementById('spotify-sdk-script')) {
+      const setupPlayer = () => {
+        if (!window.Spotify || sdkPlayer) return;
+        sdkPlayer = new window.Spotify.Player({
+          name: 'Vang · 3D Audio Player',
+          getOAuthToken: cb => {
+            ensureValidToken().then(t => cb(t || ''));
+          },
+          volume: 0.78
+        });
+        sdkPlayer.addListener('ready', ({ device_id }) => {
+          webDeviceId = device_id;
+          if (onReadyDevice) onReadyDevice(device_id);
+        });
+        sdkPlayer.addListener('not_ready', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('initialization_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('account_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('playback_error', () => {
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(false);
+          }
+        });
+        sdkPlayer.addListener('player_state_changed', st => {
+          const isSdkActivelyPlaying = Boolean(
+            st && !st.paused && st.track_window && st.track_window.current_track
+          );
+          if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
+            window.AudioEngine.setSpotifyDeviceAudible(isSdkActivelyPlaying);
+          }
+          if (st && onStateChange) onStateChange(st);
+        });
+        sdkPlayer.connect();
+      };
+
+      window.onSpotifyWebPlaybackSDKReady = setupPlayer;
+      if (window.Spotify) {
+        setupPlayer();
+      } else if (!document.getElementById('spotify-sdk-script')) {
         const s = document.createElement('script');
         s.id = 'spotify-sdk-script';
         s.src = 'https://sdk.scdn.co/spotify-player.js';
         s.async = true;
         document.body.appendChild(s);
       }
-      window.onSpotifyWebPlaybackSDKReady = () => {
-        if (!window.Spotify) return;
-        sdkPlayer = new window.Spotify.Player({
-          name: 'Vang · 3D Audio Player',
-          getOAuthToken: cb => {
-            ensureValidToken().then(t => cb(t || ''));
-          },
-          volume: 0.75
-        });
-        sdkPlayer.addListener('ready', ({ device_id }) => {
-          webDeviceId = device_id;
-          if (onReadyDevice) onReadyDevice(device_id);
-        });
-        sdkPlayer.addListener('player_state_changed', st => {
-          if (st && onStateChange) onStateChange(st);
-        });
-        sdkPlayer.connect();
-      };
     });
   }
 
@@ -3171,8 +3362,77 @@ const DEMO_TRACKS = [
 
 const DEMO_PLAYLISTS = [
   { id: 'pl-1', kind: 'playlist', name: 'Đêm Trắng Sài Gòn', artist: 'Tuyển tập', count: 4, trackIds: ['demo-1', 'demo-3', 'demo-5', 'demo-6'] },
-  { id: 'pl-2', kind: 'album', name: 'Ambient & Modular', artist: 'Album', count: 3, trackIds: ['demo-2', 'demo-4', 'demo-6'] }
+  { id: 'pl-2', kind: 'album', name: 'Phố Không Ngủ · 2024', artist: 'Nhóm Gác Mái', count: 2, trackIds: ['demo-1', 'demo-5'] },
+  { id: 'pl-3', kind: 'album', name: 'Ambient & Modular', artist: 'Ines Harbour · Kaito Fern', count: 3, trackIds: ['demo-2', 'demo-4', 'demo-6'] },
+  { id: 'pl-4', kind: 'album', name: 'Hà Nội, Tháng Ba · 2022', artist: 'Lê Vân Khê', count: 2, trackIds: ['demo-3', 'demo-5'] },
+  { id: 'pl-5', kind: 'album', name: 'Sóng Ngầm · 2025', artist: 'Minh Vũ · Analog Lab', count: 2, trackIds: ['demo-6', 'demo-4'] }
 ];
+
+// Build playable album collections directly from library tracks so every album in the user's library opens in 0ms
+function buildLibraryAlbums(tracks) {
+  const map = new Map();
+  for (const tr of tracks || []) {
+    if (!tr || !tr.al || tr.al === 'Spotify' || tr.al === 'Bộ nhớ thiết bị') continue;
+    const key = tr.albumId || tr.al.toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        id: tr.albumId || ('lib-alb-' + map.size),
+        uri: tr.albumUri || (tr.albumId ? `spotify:album:${tr.albumId}` : ''),
+        kind: 'album',
+        name: tr.al,
+        artist: tr.a || 'Album',
+        count: 0,
+        cover: tr.cover || '',
+        preloadedTracks: []
+      });
+    }
+    const entry = map.get(key);
+    if (!entry.cover && tr.cover) entry.cover = tr.cover;
+    if (!entry.preloadedTracks.some(x => x.id === tr.id)) {
+      entry.preloadedTracks.push(tr);
+      entry.count = entry.preloadedTracks.length;
+    }
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 120);
+}
+
+function mergeCollections(...lists) {
+  const seen = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || !item.id) continue;
+      const idKey = String(item.id);
+      const nameKey = `${item.kind || 'playlist'}:${String(item.name || '').toLowerCase().trim()}`;
+      if (seen.has(idKey)) {
+        const prev = seen.get(idKey);
+        if ((!prev.preloadedTracks || !prev.preloadedTracks.length) && item.preloadedTracks && item.preloadedTracks.length) {
+          prev.preloadedTracks = item.preloadedTracks;
+          prev.count = Math.max(prev.count || 0, item.preloadedTracks.length);
+        }
+        continue;
+      }
+      let dupByName = null;
+      for (const existing of seen.values()) {
+        if (`${existing.kind || 'playlist'}:${String(existing.name || '').toLowerCase().trim()}` === nameKey) {
+          dupByName = existing;
+          break;
+        }
+      }
+      if (dupByName) {
+        if ((!dupByName.preloadedTracks || !dupByName.preloadedTracks.length) && item.preloadedTracks && item.preloadedTracks.length) {
+          dupByName.preloadedTracks = item.preloadedTracks;
+          dupByName.count = Math.max(dupByName.count || 0, item.preloadedTracks.length);
+        }
+        continue;
+      }
+      seen.set(idKey, item);
+    }
+  }
+  return Array.from(seen.values());
+}
 
 // Minimal geometric task icons
 const TASK_ICONS = {
@@ -3426,12 +3686,13 @@ function bindCollectionHeaderButtons() {
   const btnPlayCol = document.getElementById('btn-play-collection');
   if (btnPlayCol) {
     btnPlayCol.onclick = () => {
+      AudioEngine.ensureContext();
       if (AppState.tracks.length > 0) {
         selectTrack(0, true);
       } else if (AppState.spotifyActive && AppState.openedCollection && AppState.openedCollection.uri) {
         SpotifyClient.playContextUri(AppState.openedCollection.uri, 0, SpotifyClient.getWebDeviceId())
           .then(() => {
-            setPlaying(true);
+            setPlaying(true, true);
             showToast('Đang phát: ' + AppState.openedCollection.name);
           })
           .catch(() => {});
@@ -3440,8 +3701,10 @@ function bindCollectionHeaderButtons() {
   }
 }
 
-// Open any Playlist or Saved Album reliably
+// Open any Playlist or Saved Album reliably and start playback immediately
 async function openPlaylist(plId) {
+  AudioEngine.ensureContext();
+
   const pl = AppState.playlists.find(p => String(p.id) === String(plId)) ||
              DEMO_PLAYLISTS.find(p => String(p.id) === String(plId));
 
@@ -3449,34 +3712,90 @@ async function openPlaylist(plId) {
     const colMeta = pl || { id: plId, kind: 'playlist', name: 'Tuyển tập', uri: `spotify:playlist:${plId}` };
     AppState.openedCollection = colMeta;
 
+    // 1. Instant path: if preloadedTracks or matching library tracks exist, open & play in 0ms!
+    const preloaded = (colMeta.preloadedTracks && colMeta.preloadedTracks.length)
+      ? colMeta.preloadedTracks.slice()
+      : AppState.allTracks.filter(
+          tr => (tr.albumId && String(tr.albumId) === String(plId)) ||
+                (colMeta.name && tr.al && tr.al.toLowerCase().trim() === colMeta.name.toLowerCase().trim())
+        );
+
+    if (preloaded.length > 0) {
+      AppState.tracks = preloaded;
+      renderTrackList();
+      selectTrack(0, true);
+      showToast(`Đang phát "${colMeta.name}" (${preloaded.length} bài)`);
+
+      // If it's a Spotify album or playlist that might have more tracks on the server, fetch in background
+      if (!String(plId).startsWith('lib-alb-') && !String(plId).startsWith('pl-')) {
+        SpotifyClient.fetchPlaylistTracks(
+          plId,
+          500,
+          null,
+          colMeta.kind || 'playlist',
+          null,
+          colMeta.name || ''
+        ).then(fullItems => {
+          if (fullItems && fullItems.length > preloaded.length && AppState.openedCollection === colMeta) {
+            AppState.tracks = fullItems;
+            renderTrackList();
+          }
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // 2. Network path: show immediate collection view with loading message so UI never feels frozen
+    AppState.tracks = [];
+    const container = document.getElementById('track-list');
+    if (container) {
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--line-strong);margin-bottom:4px">
+          <button id="btn-back-playlists" class="word mono" type="button" style="height:28px;font-size:10.5px">← Tuyển tập</button>
+          <div class="truncate" style="font-size:12px;font-weight:600;color:var(--acc);flex:1;text-align:center">${escHtml(colMeta.name)}</div>
+          <button id="btn-play-collection" class="word mono on" type="button" style="height:28px;font-size:10.5px">Phát tất cả</button>
+        </div>
+        <div class="dim" style="padding:20px 0;font-size:12px">Đang tải danh sách bài hát từ "${escHtml(colMeta.name)}"...</div>`;
+      bindCollectionHeaderButtons();
+    }
+
     try {
       showToast('Đang mở: ' + colMeta.name);
+      let firstChunkPlayed = false;
       const items = await SpotifyClient.fetchPlaylistTracks(
         plId,
         500,
         partial => {
-          if (partial.length) {
+          if (partial.length && AppState.openedCollection === colMeta) {
             AppState.tracks = partial;
             renderTrackList();
+            if (!firstChunkPlayed) {
+              firstChunkPlayed = true;
+              selectTrack(0, true);
+            }
           }
         },
         colMeta.kind || 'playlist',
-        colMeta.preloadedTracks || null
+        null,
+        colMeta.name || ''
       );
 
       if (items && items.length) {
+        colMeta.preloadedTracks = items;
         AppState.tracks = items;
         renderTrackList();
-        selectTrack(0, true);
-        showToast(`Đã mở "${colMeta.name}" (${items.length} bài)`);
+        if (!firstChunkPlayed) {
+          selectTrack(0, true);
+        }
+        showToast(`Đang phát "${colMeta.name}" (${items.length} bài)`);
         return;
       }
 
-      // Fallback: if Spotify restricts track listing for an algorithmic/editorial playlist,
-      // start playback directly via context_uri and sync the active queue!
+      // 3. Fallback: start playback via context_uri and sync queue or library tracks
       if (colMeta.uri) {
         await SpotifyClient.playContextUri(colMeta.uri, 0, SpotifyClient.getWebDeviceId()).catch(() => {});
-        setPlaying(true);
+        setPlaying(true, true);
+        await new Promise(r => setTimeout(r, 550));
         const qInfo = await SpotifyClient.fetchCurrentQueue().catch(() => null);
         if (qInfo && qInfo.tracks && qInfo.tracks.length) {
           AppState.tracks = qInfo.tracks;
@@ -3486,27 +3805,44 @@ async function openPlaylist(plId) {
           return;
         }
       }
+
+      if (AppState.allTracks.length > 0) {
+        AppState.tracks = AppState.allTracks.slice(0, 40);
+        renderTrackList();
+        selectTrack(0, true);
+        showToast('Đang phát: ' + colMeta.name);
+        return;
+      }
+
       renderTrackList();
       showToast('Đã mở: ' + colMeta.name);
       return;
     } catch (e) {
-      showToast('Không tải được danh sách bài hát');
+      if (AppState.allTracks.length > 0) {
+        AppState.tracks = AppState.allTracks.slice(0, 40);
+        renderTrackList();
+        selectTrack(0, true);
+      } else {
+        showToast('Không tải được danh sách bài hát');
+      }
     }
+    return;
   }
 
   // Demo mode playlist/album opening
-  if (pl) {
-    AppState.openedCollection = pl;
-    if (pl.preloadedTracks && pl.preloadedTracks.length) {
-      AppState.tracks = pl.preloadedTracks.slice();
-    } else if (pl.trackIds) {
-      AppState.tracks = DEMO_TRACKS.filter(t => pl.trackIds.includes(t.id));
+  const targetPl = pl || DEMO_PLAYLISTS[0];
+  if (targetPl) {
+    AppState.openedCollection = targetPl;
+    if (targetPl.preloadedTracks && targetPl.preloadedTracks.length) {
+      AppState.tracks = targetPl.preloadedTracks.slice();
+    } else if (targetPl.trackIds) {
+      AppState.tracks = DEMO_TRACKS.filter(t => targetPl.trackIds.includes(t.id));
     } else {
       AppState.tracks = DEMO_TRACKS.slice();
     }
     renderTrackList();
     selectTrack(0, true);
-    showToast('Đã mở: ' + pl.name);
+    showToast('Đang phát: ' + targetPl.name);
   }
 }
 
@@ -3524,7 +3860,7 @@ function renderMetadata() {
       tr.c = rgb;
     });
   }
-  if (AudioEngine.syncTrackAudioProfile && (AppState.spotifyActive || tr.localUrl)) {
+  if (AudioEngine.syncTrackAudioProfile) {
     AudioEngine.syncTrackAudioProfile(tr, AppState.playing);
   }
   updateMediaSession();
@@ -3532,18 +3868,19 @@ function renderMetadata() {
 
 function selectTrack(index, autoPlay = false) {
   if (!AppState.tracks.length) return;
+  if (autoPlay) {
+    AudioEngine.ensureContext();
+    AppState.playing = true;
+  }
   AppState.idx = (index + AppState.tracks.length) % AppState.tracks.length;
   AppState.pos = 0;
 
+  // Render metadata synchronously so AudioEngine starts inside the user's click gesture
+  renderMetadata();
   const metaEl = document.querySelector('.stage-meta');
   if (metaEl) {
     metaEl.classList.add('swap');
-    setTimeout(() => {
-      renderMetadata();
-      metaEl.classList.remove('swap');
-    }, 280);
-  } else {
-    renderMetadata();
+    setTimeout(() => metaEl.classList.remove('swap'), 220);
   }
 
   renderTrackList();
@@ -3558,22 +3895,33 @@ function selectTrack(index, autoPlay = false) {
   }
 
   if (autoPlay) {
-    setPlaying(true);
+    // Pass skipRemoteCall = true so setPlaying doesn't send a competing empty resumePlayback() request
+    setPlaying(true, true);
   }
 }
 
-function setPlaying(playState) {
+function setPlaying(playState, skipRemoteCall = false) {
   AppState.playing = !!playState;
-  if (AppState.playing) {
-    AudioEngine.ensureContext();
-  }
-
   const tr = currentTrack();
   const isLocal = !!(tr && tr.localUrl);
 
-  if (AppState.spotifyActive && !isLocal) {
-    if (AppState.playing) SpotifyClient.resumePlayback().catch(() => {});
-    else SpotifyClient.pausePlayback().catch(() => {});
+  if (AppState.playing) {
+    AudioEngine.ensureContext();
+    if (AudioEngine.syncTrackAudioProfile && tr) {
+      AudioEngine.syncTrackAudioProfile(tr, true);
+    }
+  }
+
+  if (AppState.spotifyActive && !isLocal && !skipRemoteCall) {
+    if (AppState.playing) {
+      const uris = AppState.tracks.map(x => x.uri).filter(Boolean);
+      const winStart = Math.max(0, AppState.idx - 10);
+      const winUris = uris.slice(winStart, winStart + 80);
+      const relOffset = Math.max(0, AppState.idx - winStart);
+      SpotifyClient.resumePlayback(winUris, relOffset, AppState.pos * 1000).catch(() => {});
+    } else {
+      SpotifyClient.pausePlayback().catch(() => {});
+    }
   }
   if (AudioEngine.setReferencePlaying) {
     AudioEngine.setReferencePlaying(AppState.playing);
@@ -3683,9 +4031,13 @@ function switchTab(tabName) {
       return;
     }
     if (tabName === 'playlists') {
+      const libAlbums = buildLibraryAlbums(AppState.allTracks);
+      if (libAlbums.length) {
+        AppState.playlists = mergeCollections(AppState.playlists, libAlbums);
+      }
       renderTrackList();
       SpotifyClient.fetchPlaylists(200).then(pls => {
-        if (pls.length) AppState.playlists = pls;
+        AppState.playlists = mergeCollections(pls, buildLibraryAlbums(AppState.allTracks));
         if (AppState.tab === 'playlists' && !AppState.openedCollection) renderTrackList();
       }).catch(() => renderTrackList());
       return;
@@ -3988,7 +4340,6 @@ async function syncFullSpotifyLibrary(showFeedback = false) {
     if (liked.length) AppState.likedTracks = liked;
     if (top.length) AppState.topTracks = top;
     if (recent.length) AppState.recentTracks = recent;
-    if (playlists.length) AppState.playlists = playlists;
 
     let combined = mergeUniqueTracks(
       AppState.localTracks,
@@ -4003,10 +4354,16 @@ async function syncFullSpotifyLibrary(showFeedback = false) {
       const topPlaylists = playlists.slice(0, 3);
       for (const pl of topPlaylists) {
         try {
-          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200, null, pl.kind, pl.preloadedTracks);
+          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200, null, pl.kind, pl.preloadedTracks, pl.name);
           combined = mergeUniqueTracks(combined, plTracks);
         } catch (e) {}
       }
+    }
+
+    const derivedAlbums = buildLibraryAlbums(combined);
+    const mergedCols = mergeCollections(playlists, savedAlbumsInfo.albums || [], derivedAlbums);
+    if (mergedCols.length) {
+      AppState.playlists = mergedCols;
     }
 
     if (combined.length > 0) {
@@ -4476,7 +4833,9 @@ window.addEventListener('DOMContentLoaded', initApp);
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      try { reg.update(); } catch (e) {}
+    }).catch(() => {});
   });
 }
   </script>

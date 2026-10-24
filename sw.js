@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vang-pwa-v1';
+const CACHE_NAME = 'vang-pwa-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,16 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  // Network-first so updates to index.html take effect immediately; fallback to cache when offline
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request)
+      .then(resp => {
+        if (resp && resp.status === 200) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone)).catch(() => {});
+        }
+        return resp;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

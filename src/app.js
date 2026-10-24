@@ -106,8 +106,77 @@ const DEMO_TRACKS = [
 
 const DEMO_PLAYLISTS = [
   { id: 'pl-1', kind: 'playlist', name: 'Đêm Trắng Sài Gòn', artist: 'Tuyển tập', count: 4, trackIds: ['demo-1', 'demo-3', 'demo-5', 'demo-6'] },
-  { id: 'pl-2', kind: 'album', name: 'Ambient & Modular', artist: 'Album', count: 3, trackIds: ['demo-2', 'demo-4', 'demo-6'] }
+  { id: 'pl-2', kind: 'album', name: 'Phố Không Ngủ · 2024', artist: 'Nhóm Gác Mái', count: 2, trackIds: ['demo-1', 'demo-5'] },
+  { id: 'pl-3', kind: 'album', name: 'Ambient & Modular', artist: 'Ines Harbour · Kaito Fern', count: 3, trackIds: ['demo-2', 'demo-4', 'demo-6'] },
+  { id: 'pl-4', kind: 'album', name: 'Hà Nội, Tháng Ba · 2022', artist: 'Lê Vân Khê', count: 2, trackIds: ['demo-3', 'demo-5'] },
+  { id: 'pl-5', kind: 'album', name: 'Sóng Ngầm · 2025', artist: 'Minh Vũ · Analog Lab', count: 2, trackIds: ['demo-6', 'demo-4'] }
 ];
+
+// Build playable album collections directly from library tracks so every album in the user's library opens in 0ms
+function buildLibraryAlbums(tracks) {
+  const map = new Map();
+  for (const tr of tracks || []) {
+    if (!tr || !tr.al || tr.al === 'Spotify' || tr.al === 'Bộ nhớ thiết bị') continue;
+    const key = tr.albumId || tr.al.toLowerCase().trim();
+    if (!map.has(key)) {
+      map.set(key, {
+        id: tr.albumId || ('lib-alb-' + map.size),
+        uri: tr.albumUri || (tr.albumId ? `spotify:album:${tr.albumId}` : ''),
+        kind: 'album',
+        name: tr.al,
+        artist: tr.a || 'Album',
+        count: 0,
+        cover: tr.cover || '',
+        preloadedTracks: []
+      });
+    }
+    const entry = map.get(key);
+    if (!entry.cover && tr.cover) entry.cover = tr.cover;
+    if (!entry.preloadedTracks.some(x => x.id === tr.id)) {
+      entry.preloadedTracks.push(tr);
+      entry.count = entry.preloadedTracks.length;
+    }
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 120);
+}
+
+function mergeCollections(...lists) {
+  const seen = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || !item.id) continue;
+      const idKey = String(item.id);
+      const nameKey = `${item.kind || 'playlist'}:${String(item.name || '').toLowerCase().trim()}`;
+      if (seen.has(idKey)) {
+        const prev = seen.get(idKey);
+        if ((!prev.preloadedTracks || !prev.preloadedTracks.length) && item.preloadedTracks && item.preloadedTracks.length) {
+          prev.preloadedTracks = item.preloadedTracks;
+          prev.count = Math.max(prev.count || 0, item.preloadedTracks.length);
+        }
+        continue;
+      }
+      let dupByName = null;
+      for (const existing of seen.values()) {
+        if (`${existing.kind || 'playlist'}:${String(existing.name || '').toLowerCase().trim()}` === nameKey) {
+          dupByName = existing;
+          break;
+        }
+      }
+      if (dupByName) {
+        if ((!dupByName.preloadedTracks || !dupByName.preloadedTracks.length) && item.preloadedTracks && item.preloadedTracks.length) {
+          dupByName.preloadedTracks = item.preloadedTracks;
+          dupByName.count = Math.max(dupByName.count || 0, item.preloadedTracks.length);
+        }
+        continue;
+      }
+      seen.set(idKey, item);
+    }
+  }
+  return Array.from(seen.values());
+}
 
 // Minimal geometric task icons
 const TASK_ICONS = {
@@ -361,12 +430,13 @@ function bindCollectionHeaderButtons() {
   const btnPlayCol = document.getElementById('btn-play-collection');
   if (btnPlayCol) {
     btnPlayCol.onclick = () => {
+      AudioEngine.ensureContext();
       if (AppState.tracks.length > 0) {
         selectTrack(0, true);
       } else if (AppState.spotifyActive && AppState.openedCollection && AppState.openedCollection.uri) {
         SpotifyClient.playContextUri(AppState.openedCollection.uri, 0, SpotifyClient.getWebDeviceId())
           .then(() => {
-            setPlaying(true);
+            setPlaying(true, true);
             showToast('Đang phát: ' + AppState.openedCollection.name);
           })
           .catch(() => {});
@@ -375,8 +445,10 @@ function bindCollectionHeaderButtons() {
   }
 }
 
-// Open any Playlist or Saved Album reliably
+// Open any Playlist or Saved Album reliably and start playback immediately
 async function openPlaylist(plId) {
+  AudioEngine.ensureContext();
+
   const pl = AppState.playlists.find(p => String(p.id) === String(plId)) ||
              DEMO_PLAYLISTS.find(p => String(p.id) === String(plId));
 
@@ -384,34 +456,90 @@ async function openPlaylist(plId) {
     const colMeta = pl || { id: plId, kind: 'playlist', name: 'Tuyển tập', uri: `spotify:playlist:${plId}` };
     AppState.openedCollection = colMeta;
 
+    // 1. Instant path: if preloadedTracks or matching library tracks exist, open & play in 0ms!
+    const preloaded = (colMeta.preloadedTracks && colMeta.preloadedTracks.length)
+      ? colMeta.preloadedTracks.slice()
+      : AppState.allTracks.filter(
+          tr => (tr.albumId && String(tr.albumId) === String(plId)) ||
+                (colMeta.name && tr.al && tr.al.toLowerCase().trim() === colMeta.name.toLowerCase().trim())
+        );
+
+    if (preloaded.length > 0) {
+      AppState.tracks = preloaded;
+      renderTrackList();
+      selectTrack(0, true);
+      showToast(`Đang phát "${colMeta.name}" (${preloaded.length} bài)`);
+
+      // If it's a Spotify album or playlist that might have more tracks on the server, fetch in background
+      if (!String(plId).startsWith('lib-alb-') && !String(plId).startsWith('pl-')) {
+        SpotifyClient.fetchPlaylistTracks(
+          plId,
+          500,
+          null,
+          colMeta.kind || 'playlist',
+          null,
+          colMeta.name || ''
+        ).then(fullItems => {
+          if (fullItems && fullItems.length > preloaded.length && AppState.openedCollection === colMeta) {
+            AppState.tracks = fullItems;
+            renderTrackList();
+          }
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // 2. Network path: show immediate collection view with loading message so UI never feels frozen
+    AppState.tracks = [];
+    const container = document.getElementById('track-list');
+    if (container) {
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--line-strong);margin-bottom:4px">
+          <button id="btn-back-playlists" class="word mono" type="button" style="height:28px;font-size:10.5px">← Tuyển tập</button>
+          <div class="truncate" style="font-size:12px;font-weight:600;color:var(--acc);flex:1;text-align:center">${escHtml(colMeta.name)}</div>
+          <button id="btn-play-collection" class="word mono on" type="button" style="height:28px;font-size:10.5px">Phát tất cả</button>
+        </div>
+        <div class="dim" style="padding:20px 0;font-size:12px">Đang tải danh sách bài hát từ "${escHtml(colMeta.name)}"...</div>`;
+      bindCollectionHeaderButtons();
+    }
+
     try {
       showToast('Đang mở: ' + colMeta.name);
+      let firstChunkPlayed = false;
       const items = await SpotifyClient.fetchPlaylistTracks(
         plId,
         500,
         partial => {
-          if (partial.length) {
+          if (partial.length && AppState.openedCollection === colMeta) {
             AppState.tracks = partial;
             renderTrackList();
+            if (!firstChunkPlayed) {
+              firstChunkPlayed = true;
+              selectTrack(0, true);
+            }
           }
         },
         colMeta.kind || 'playlist',
-        colMeta.preloadedTracks || null
+        null,
+        colMeta.name || ''
       );
 
       if (items && items.length) {
+        colMeta.preloadedTracks = items;
         AppState.tracks = items;
         renderTrackList();
-        selectTrack(0, true);
-        showToast(`Đã mở "${colMeta.name}" (${items.length} bài)`);
+        if (!firstChunkPlayed) {
+          selectTrack(0, true);
+        }
+        showToast(`Đang phát "${colMeta.name}" (${items.length} bài)`);
         return;
       }
 
-      // Fallback: if Spotify restricts track listing for an algorithmic/editorial playlist,
-      // start playback directly via context_uri and sync the active queue!
+      // 3. Fallback: start playback via context_uri and sync queue or library tracks
       if (colMeta.uri) {
         await SpotifyClient.playContextUri(colMeta.uri, 0, SpotifyClient.getWebDeviceId()).catch(() => {});
-        setPlaying(true);
+        setPlaying(true, true);
+        await new Promise(r => setTimeout(r, 550));
         const qInfo = await SpotifyClient.fetchCurrentQueue().catch(() => null);
         if (qInfo && qInfo.tracks && qInfo.tracks.length) {
           AppState.tracks = qInfo.tracks;
@@ -421,27 +549,44 @@ async function openPlaylist(plId) {
           return;
         }
       }
+
+      if (AppState.allTracks.length > 0) {
+        AppState.tracks = AppState.allTracks.slice(0, 40);
+        renderTrackList();
+        selectTrack(0, true);
+        showToast('Đang phát: ' + colMeta.name);
+        return;
+      }
+
       renderTrackList();
       showToast('Đã mở: ' + colMeta.name);
       return;
     } catch (e) {
-      showToast('Không tải được danh sách bài hát');
+      if (AppState.allTracks.length > 0) {
+        AppState.tracks = AppState.allTracks.slice(0, 40);
+        renderTrackList();
+        selectTrack(0, true);
+      } else {
+        showToast('Không tải được danh sách bài hát');
+      }
     }
+    return;
   }
 
   // Demo mode playlist/album opening
-  if (pl) {
-    AppState.openedCollection = pl;
-    if (pl.preloadedTracks && pl.preloadedTracks.length) {
-      AppState.tracks = pl.preloadedTracks.slice();
-    } else if (pl.trackIds) {
-      AppState.tracks = DEMO_TRACKS.filter(t => pl.trackIds.includes(t.id));
+  const targetPl = pl || DEMO_PLAYLISTS[0];
+  if (targetPl) {
+    AppState.openedCollection = targetPl;
+    if (targetPl.preloadedTracks && targetPl.preloadedTracks.length) {
+      AppState.tracks = targetPl.preloadedTracks.slice();
+    } else if (targetPl.trackIds) {
+      AppState.tracks = DEMO_TRACKS.filter(t => targetPl.trackIds.includes(t.id));
     } else {
       AppState.tracks = DEMO_TRACKS.slice();
     }
     renderTrackList();
     selectTrack(0, true);
-    showToast('Đã mở: ' + pl.name);
+    showToast('Đang phát: ' + targetPl.name);
   }
 }
 
@@ -459,7 +604,7 @@ function renderMetadata() {
       tr.c = rgb;
     });
   }
-  if (AudioEngine.syncTrackAudioProfile && (AppState.spotifyActive || tr.localUrl)) {
+  if (AudioEngine.syncTrackAudioProfile) {
     AudioEngine.syncTrackAudioProfile(tr, AppState.playing);
   }
   updateMediaSession();
@@ -467,18 +612,19 @@ function renderMetadata() {
 
 function selectTrack(index, autoPlay = false) {
   if (!AppState.tracks.length) return;
+  if (autoPlay) {
+    AudioEngine.ensureContext();
+    AppState.playing = true;
+  }
   AppState.idx = (index + AppState.tracks.length) % AppState.tracks.length;
   AppState.pos = 0;
 
+  // Render metadata synchronously so AudioEngine starts inside the user's click gesture
+  renderMetadata();
   const metaEl = document.querySelector('.stage-meta');
   if (metaEl) {
     metaEl.classList.add('swap');
-    setTimeout(() => {
-      renderMetadata();
-      metaEl.classList.remove('swap');
-    }, 280);
-  } else {
-    renderMetadata();
+    setTimeout(() => metaEl.classList.remove('swap'), 220);
   }
 
   renderTrackList();
@@ -493,22 +639,33 @@ function selectTrack(index, autoPlay = false) {
   }
 
   if (autoPlay) {
-    setPlaying(true);
+    // Pass skipRemoteCall = true so setPlaying doesn't send a competing empty resumePlayback() request
+    setPlaying(true, true);
   }
 }
 
-function setPlaying(playState) {
+function setPlaying(playState, skipRemoteCall = false) {
   AppState.playing = !!playState;
-  if (AppState.playing) {
-    AudioEngine.ensureContext();
-  }
-
   const tr = currentTrack();
   const isLocal = !!(tr && tr.localUrl);
 
-  if (AppState.spotifyActive && !isLocal) {
-    if (AppState.playing) SpotifyClient.resumePlayback().catch(() => {});
-    else SpotifyClient.pausePlayback().catch(() => {});
+  if (AppState.playing) {
+    AudioEngine.ensureContext();
+    if (AudioEngine.syncTrackAudioProfile && tr) {
+      AudioEngine.syncTrackAudioProfile(tr, true);
+    }
+  }
+
+  if (AppState.spotifyActive && !isLocal && !skipRemoteCall) {
+    if (AppState.playing) {
+      const uris = AppState.tracks.map(x => x.uri).filter(Boolean);
+      const winStart = Math.max(0, AppState.idx - 10);
+      const winUris = uris.slice(winStart, winStart + 80);
+      const relOffset = Math.max(0, AppState.idx - winStart);
+      SpotifyClient.resumePlayback(winUris, relOffset, AppState.pos * 1000).catch(() => {});
+    } else {
+      SpotifyClient.pausePlayback().catch(() => {});
+    }
   }
   if (AudioEngine.setReferencePlaying) {
     AudioEngine.setReferencePlaying(AppState.playing);
@@ -618,9 +775,13 @@ function switchTab(tabName) {
       return;
     }
     if (tabName === 'playlists') {
+      const libAlbums = buildLibraryAlbums(AppState.allTracks);
+      if (libAlbums.length) {
+        AppState.playlists = mergeCollections(AppState.playlists, libAlbums);
+      }
       renderTrackList();
       SpotifyClient.fetchPlaylists(200).then(pls => {
-        if (pls.length) AppState.playlists = pls;
+        AppState.playlists = mergeCollections(pls, buildLibraryAlbums(AppState.allTracks));
         if (AppState.tab === 'playlists' && !AppState.openedCollection) renderTrackList();
       }).catch(() => renderTrackList());
       return;
@@ -923,7 +1084,6 @@ async function syncFullSpotifyLibrary(showFeedback = false) {
     if (liked.length) AppState.likedTracks = liked;
     if (top.length) AppState.topTracks = top;
     if (recent.length) AppState.recentTracks = recent;
-    if (playlists.length) AppState.playlists = playlists;
 
     let combined = mergeUniqueTracks(
       AppState.localTracks,
@@ -938,10 +1098,16 @@ async function syncFullSpotifyLibrary(showFeedback = false) {
       const topPlaylists = playlists.slice(0, 3);
       for (const pl of topPlaylists) {
         try {
-          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200, null, pl.kind, pl.preloadedTracks);
+          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200, null, pl.kind, pl.preloadedTracks, pl.name);
           combined = mergeUniqueTracks(combined, plTracks);
         } catch (e) {}
       }
+    }
+
+    const derivedAlbums = buildLibraryAlbums(combined);
+    const mergedCols = mergeCollections(playlists, savedAlbumsInfo.albums || [], derivedAlbums);
+    if (mergedCols.length) {
+      AppState.playlists = mergedCols;
     }
 
     if (combined.length > 0) {
