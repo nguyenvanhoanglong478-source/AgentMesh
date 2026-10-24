@@ -1,0 +1,2880 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E0D0B" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VANG" />
+  <title>VANG — Không gian âm thanh 3D cho Spotify</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <style>
+:root {
+  --ink: #0E0D0B;
+  --ink-elev: #151310;
+  --paper: #ECE5D8;
+  --dim: #8C857A;
+  --muted: #4E4942;
+  --line: rgba(236, 229, 216, 0.13);
+  --line-strong: rgba(236, 229, 216, 0.28);
+  --acc: #D9822B;
+  --acc-rgb: 217, 130, 43;
+  --f-sans: "Helvetica Neue", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--f-sans);
+  font-size: 15px;
+  line-height: 1.4;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography & Utility */
+.mono {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dim { color: var(--dim); }
+.acc { color: var(--acc); }
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Editorial Word Buttons */
+.word {
+  background: none;
+  border: 0;
+  color: var(--paper);
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 0;
+  position: relative;
+  transition: color 0.25s ease;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.word:hover {
+  color: var(--acc);
+}
+
+.word::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.42s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.word:hover::after,
+.word.on::after {
+  transform: scaleX(1);
+}
+
+.word.on {
+  color: var(--acc);
+}
+
+.word:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.word:disabled::after {
+  display: none;
+}
+
+/* Geometric Transport Buttons (Play triangle, Pause bars, Prev/Next, etc.) */
+.ctl-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--paper);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  transition: color 0.2s ease, border-color 0.25s ease, background 0.25s ease, transform 0.15s ease;
+}
+
+.ctl-btn:hover {
+  color: var(--acc);
+  border-color: var(--line-strong);
+}
+
+.ctl-btn:active {
+  transform: scale(0.93);
+}
+
+.ctl-btn.on {
+  color: var(--acc);
+}
+
+.ctl-btn.play-btn {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line-strong);
+  background: rgba(236, 229, 216, 0.04);
+}
+
+.ctl-btn.play-btn:hover {
+  border-color: var(--acc);
+  background: rgba(var(--acc-rgb), 0.12);
+  color: var(--acc);
+}
+
+.ctl-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* App Shell Grid (Desktop Default) */
+.app-shell {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: 280px 1fr 230px;
+  grid-template-rows: 56px 1fr 88px;
+  background: var(--ink);
+  position: relative;
+}
+
+/* Header */
+.topbar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 280px 1fr 230px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  z-index: 10;
+  background: rgba(14, 13, 11, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  padding: 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand-mark {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 10px var(--acc);
+  transition: background 0.6s ease, box-shadow 0.6s ease;
+}
+
+.top-center {
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.top-right {
+  padding: 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+/* Left Panel: Queue & Library */
+.left-pane {
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ink);
+  z-index: 5;
+}
+
+.pane-sec {
+  padding: 20px 26px 14px;
+}
+
+.nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  padding: 16px 26px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.search-wrap {
+  padding: 12px 26px;
+  border-bottom: 1px solid var(--line);
+  display: none;
+}
+
+.search-wrap.show {
+  display: block;
+}
+
+.search-input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--paper);
+  font-family: var(--f-sans);
+  font-size: 14px;
+  padding: 6px 0;
+  outline: none;
+}
+
+.search-input:focus {
+  border-bottom-color: var(--acc);
+}
+
+.search-input::placeholder {
+  color: var(--dim);
+}
+
+.track-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 26px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+
+.track-list::-webkit-scrollbar {
+  width: 4px;
+}
+.track-list::-webkit-scrollbar-thumb {
+  background: var(--muted);
+}
+
+.qrow {
+  display: grid;
+  grid-template-columns: 22px 38px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.qrow:hover .qt {
+  color: var(--acc);
+}
+
+.qrow.cur .qt {
+  color: var(--acc);
+  font-weight: 600;
+}
+
+.qrow.cur .qidx {
+  color: var(--acc);
+}
+
+.art {
+  width: 38px;
+  height: 38px;
+  border-radius: 2px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(236, 229, 216, 0.12);
+}
+
+.qt {
+  font-size: 14px;
+  color: var(--paper);
+  transition: color 0.2s ease;
+}
+
+.qa {
+  font-size: 12.5px;
+  color: var(--dim);
+}
+
+/* Center Stage: 3D Audio Sculpture + Editorial Typography */
+.stage {
+  position: relative;
+  overflow: hidden;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 42%, transparent 35%, rgba(14, 13, 11, 0.62) 100%),
+    linear-gradient(180deg, rgba(14, 13, 11, 0.25) 0%, transparent 25%, transparent 55%, rgba(14, 13, 11, 0.88) 100%);
+  z-index: 1;
+}
+
+.stage-hud-top {
+  position: absolute;
+  top: 22px;
+  left: 36px;
+  right: 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.stage-meta {
+  position: relative;
+  z-index: 2;
+  padding: 0 38px 32px;
+  pointer-events: none;
+}
+
+.track-album {
+  color: var(--dim);
+  margin-bottom: 10px;
+  transition: opacity 0.45s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.track-title {
+  font-size: clamp(34px, 5vw, 68px);
+  font-weight: 500;
+  line-height: 0.94;
+  letter-spacing: -0.035em;
+  max-width: 780px;
+  color: var(--paper);
+  transition: opacity 0.45s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  text-wrap: balance;
+}
+
+.track-artist {
+  margin-top: 12px;
+  font-size: clamp(16px, 1.8vw, 21px);
+  color: var(--dim);
+  transition: opacity 0.45s 0.05s ease, transform 0.6s 0.05s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.stage-meta.swap .track-album,
+.stage-meta.swap .track-title,
+.stage-meta.swap .track-artist {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+/* Right Panel: 3D Visualizer Modes & Signal Meters */
+.right-pane {
+  border-left: 1px solid var(--line);
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow-y: auto;
+  background: var(--ink);
+  z-index: 5;
+}
+
+.sec-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sec-label {
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+
+.meter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.meter-hdr {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.meter {
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.meter i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--paper);
+  transition: width 0.06s linear;
+}
+
+.meter i.acc-bar {
+  background: var(--acc);
+}
+
+/* Bottom Transport Bar */
+.transport {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 280px 1fr 230px;
+  align-items: center;
+  background: var(--ink);
+  z-index: 10;
+}
+
+.transport-left {
+  padding: 0 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport-center {
+  padding: 0 38px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.transport-right {
+  padding: 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Scrubber & Volume Track */
+.scrub-track {
+  flex: 1;
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+}
+
+.scrub-track::before {
+  content: "";
+  position: absolute;
+  inset: -12px 0;
+}
+
+.scrub-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  background: var(--paper);
+  pointer-events: none;
+}
+
+.scrub-head {
+  position: absolute;
+  top: -3.5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--acc);
+  margin-left: -4.5px;
+  pointer-events: none;
+  box-shadow: 0 0 8px var(--acc);
+  transition: transform 0.15s ease;
+}
+
+.scrub-track:hover .scrub-head {
+  transform: scale(1.3);
+}
+
+.vol-track {
+  width: 84px;
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+}
+
+.vol-track::before {
+  content: "";
+  position: absolute;
+  inset: -10px 0;
+}
+
+/* Modals (Spotify Connect, Device Picker, Mobile Drawer) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 7, 6, 0.78);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--ink-elev);
+  border: 1px solid var(--line-strong);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.7);
+}
+
+.modal-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.field-input {
+  width: 100%;
+  background: var(--ink);
+  border: 1px solid var(--line-strong);
+  color: var(--paper);
+  font-family: var(--f-mono);
+  font-size: 13px;
+  padding: 11px 12px;
+  outline: none;
+}
+
+.field-input:focus {
+  border-color: var(--acc);
+}
+
+.btn-solid {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--paper);
+  padding: 10px 18px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-solid:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--ink);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--line-strong);
+  padding: 10px 18px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-outline:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+.device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.device-item:hover {
+  border-color: var(--line-strong);
+}
+
+.device-item.active {
+  border-color: var(--acc);
+  background: rgba(var(--acc-rgb), 0.08);
+}
+
+/* Toast Notification */
+#toast {
+  position: fixed;
+  bottom: 104px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink-elev);
+  border: 1px solid var(--acc);
+  color: var(--paper);
+  padding: 9px 18px;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 200;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Mobile Bottom Nav Bar (Hidden on Desktop) */
+.mob-bar {
+  display: none;
+}
+
+/* Responsive Layout for Phones & Tablets */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 52px 1fr auto 54px;
+  }
+
+  .topbar {
+    grid-template-columns: 1fr auto;
+    padding: 0 18px;
+  }
+
+  .brand {
+    padding: 0;
+  }
+
+  .top-center {
+    display: none;
+  }
+
+  .top-right {
+    padding: 0;
+    gap: 14px;
+  }
+
+  .left-pane,
+  .right-pane {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 52px;
+    bottom: 54px;
+    z-index: 40;
+    border: 0;
+    transform: translateY(102%);
+    transition: transform 0.36s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .left-pane.mob-open,
+  .right-pane.mob-open {
+    transform: translateY(0);
+  }
+
+  .stage-hud-top {
+    top: 14px;
+    left: 20px;
+    right: 20px;
+  }
+
+  .stage-meta {
+    padding: 0 22px 20px;
+  }
+
+  .track-title {
+    font-size: clamp(28px, 8vw, 42px);
+  }
+
+  .transport {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px 20px 14px;
+  }
+
+  .transport-center {
+    order: 1;
+    padding: 0;
+    gap: 12px;
+  }
+
+  .transport-left {
+    order: 2;
+    padding: 0;
+    justify-content: space-between;
+  }
+
+  .transport-right {
+    display: none;
+  }
+
+  .mob-bar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    background: var(--ink);
+    padding: 0 12px;
+    z-index: 50;
+  }
+
+  #toast {
+    bottom: 165px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <span class="status-dot"></span>
+          <span>VANG · 01</span>
+        </div>
+        <span class="mono dim js-user-status">Chế độ thử nghiệm</span>
+      </div>
+
+      <div class="top-center">
+        <div class="mono dim">
+          Đầu ra âm thanh:
+          <button class="word js-open-devices" type="button" style="margin-left:6px">
+            <span class="js-device-name">Trình phát Web · Vang (Máy này)</span>
+          </button>
+        </div>
+        <div class="mono dim">60 FPS · 3D AUDIO STAGE</div>
+      </div>
+
+      <div class="top-right">
+        <button class="word mono js-open-install" type="button">Tải ứng dụng</button>
+        <button class="word mono js-open-devices" type="button">Thiết bị phát</button>
+        <button class="word mono acc js-open-spotify" type="button">Kết nối Spotify</button>
+      </div>
+    </header>
+
+    <!-- LEFT PANE: LIBRARY & QUEUE -->
+    <aside class="left-pane" aria-label="Thư viện và danh sách phát">
+      <nav class="nav-tabs" aria-label="Phân mục thư viện">
+        <button class="word on" type="button" data-tab="queue">Danh sách phát</button>
+        <button class="word" type="button" data-tab="liked">Yêu thích</button>
+        <button class="word" type="button" data-tab="playlists">Tuyển tập</button>
+        <button class="word" type="button" data-tab="recent">Gần đây</button>
+        <button class="word" type="button" data-tab="search">Tìm kiếm</button>
+      </nav>
+
+      <div id="search-wrap" class="search-wrap">
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="Nhập tên bài hát, nghệ sĩ hoặc album..."
+          autocomplete="off"
+        />
+      </div>
+
+      <div id="track-list" class="track-list" role="list"></div>
+    </aside>
+
+    <!-- CENTER STAGE: 3D PARTICLE CLUSTER & EDITORIAL METADATA -->
+    <main id="main-stage" class="stage" aria-label="Không gian mô phỏng âm thanh 3D">
+      <div class="stage-vignette"></div>
+
+      <div class="stage-hud-top">
+        <div class="mono dim">KÉO CHUỘT HOẶC CHẠM ĐỂ XOAY KHỐI 3D</div>
+        <div class="mono dim">TÍN HIỆU THỜI GIAN THỰC · FFT</div>
+      </div>
+
+      <div class="stage-meta">
+        <div class="mono track-album js-album">Phố Không Ngủ · 2024</div>
+        <h1 class="track-title js-title">Đèn Đường Lúc Ba Giờ</h1>
+        <div class="track-artist js-artist">Nhóm Gác Mái</div>
+      </div>
+    </main>
+
+    <!-- RIGHT PANE: VISUALIZER MODES & SIGNAL METERS -->
+    <aside class="right-pane" aria-label="Cấu hình thị giác 3D và phổ tần số">
+      <div class="sec-block">
+        <div class="mono sec-label">Hình thái 3D</div>
+        <button class="word js-vmode on" type="button" data-m="cluster">Khối đốm hạt</button>
+        <button class="word js-vmode" type="button" data-m="ridge">Địa hình</button>
+        <button class="word js-vmode" type="button" data-m="vortex">Xoáy hạt</button>
+      </div>
+
+      <div class="sec-block">
+        <div class="mono sec-label">Nguồn phân tích sóng âm</div>
+        <button class="word js-src-mode on" type="button" data-src="auto">Đồng bộ nội bộ</button>
+        <button class="word js-src-mode" type="button" data-src="mic">Thu âm trực tiếp (Mic)</button>
+      </div>
+
+      <div class="sec-block">
+        <div class="mono sec-label">Phổ tần số (FFT)</div>
+
+        <div class="meter-row">
+          <div class="meter-hdr mono">
+            <span class="dim">Trầm · 60Hz</span>
+            <span class="js-mb-val">0</span>
+          </div>
+          <div class="meter"><i class="acc-bar js-mb"></i></div>
+        </div>
+
+        <div class="meter-row">
+          <div class="meter-hdr mono">
+            <span class="dim">Trung · 1kHz</span>
+            <span class="js-mm-val">0</span>
+          </div>
+          <div class="meter"><i class="js-mm"></i></div>
+        </div>
+
+        <div class="meter-row">
+          <div class="meter-hdr mono">
+            <span class="dim">Cao · 8kHz</span>
+            <span class="js-mh-val">0</span>
+          </div>
+          <div class="meter"><i class="js-mh"></i></div>
+        </div>
+      </div>
+
+      <div class="sec-block" style="margin-top:auto">
+        <div class="mono sec-label">Ứng dụng độc lập</div>
+        <div class="dim" style="font-size:12.5px;line-height:1.5">
+          Hỗ trợ dùng trực tiếp trên Web, cài đặt PWA trên Điện thoại hoặc tải bản <button class="word acc js-open-install" type="button" style="font-size:12.5px">VANG.exe</button> chạy độc lập trên PC.
+        </div>
+      </div>
+    </aside>
+
+    <!-- BOTTOM TRANSPORT BAR (Geometric Task Buttons + Scrubber + Volume) -->
+    <footer class="transport" aria-label="Điều khiển phát nhạc">
+      <div class="transport-left">
+        <button class="ctl-btn js-shuffle" type="button" title="Trộn bài" aria-label="Trộn bài"></button>
+        <button class="ctl-btn js-prev" type="button" title="Bài trước" aria-label="Bài trước"></button>
+        <button class="ctl-btn play-btn js-play" type="button" title="Phát / Tạm dừng" aria-label="Phát" data-state="paused">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <polygon points="4,2.2 13.8,8 4,13.8"/>
+          </svg>
+        </button>
+        <button class="ctl-btn js-next" type="button" title="Bài tiếp" aria-label="Bài tiếp"></button>
+        <button class="ctl-btn js-repeat" type="button" title="Lặp bài" aria-label="Lặp bài"></button>
+      </div>
+
+      <div class="transport-center">
+        <span class="mono dim js-time">0:37</span>
+        <div class="scrub-track js-scrub" role="slider" aria-label="Tiến độ bài hát">
+          <div class="scrub-fill js-scrub-fill" style="width:14.6%"></div>
+          <div class="scrub-head js-scrub-head" style="left:14.6%"></div>
+        </div>
+        <span class="mono dim js-dur">4:12</span>
+      </div>
+
+      <div class="transport-right">
+        <button class="ctl-btn js-mute" type="button" title="Âm lượng / Tắt tiếng" aria-label="Âm lượng"></button>
+        <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng">
+          <div class="scrub-fill js-vol-fill" style="width:78%"></div>
+        </div>
+        <span class="mono dim js-vol-lbl" style="min-width:24px;text-align:right">78</span>
+      </div>
+    </footer>
+
+    <!-- MOBILE BOTTOM DRAWER BAR -->
+    <nav class="mob-bar" aria-label="Điều hướng di động">
+      <button class="word mono" type="button" data-mob-drawer="left">Danh sách</button>
+      <button class="word mono js-vmode-cycle" type="button">Khối đốm hạt</button>
+      <button class="word mono" type="button" data-mob-drawer="right">Thị giác 3D</button>
+      <button class="word mono js-open-install" type="button">Tải App</button>
+    </nav>
+  </div>
+
+  <!-- MODAL 1: SPOTIFY OAUTH PKCE CONNECTION -->
+  <div id="spotify-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sp-modal-title">
+      <div class="modal-hdr">
+        <h2 id="sp-modal-title" class="modal-title">Liên kết tài khoản Spotify</h2>
+        <button class="word mono js-close-spotify" type="button">Đóng</button>
+      </div>
+
+      <p class="dim" style="font-size:13.5px;line-height:1.55">
+        VANG sử dụng chuẩn bảo mật <strong>OAuth 2.0 PKCE</strong> trực tiếp từ trình duyệt (không cần máy chủ trung gian lưu mật khẩu). Để kết nối tài khoản Spotify cá nhân trên điện thoại và laptop:
+      </p>
+
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="dim">
+        <div>1. Truy cập <strong>developer.spotify.com/dashboard</strong> và tạo một ứng dụng (Create App).</div>
+        <div>2. Thêm địa chỉ Redirect URI dưới đây vào phần cài đặt ứng dụng Spotify:</div>
+        <div id="sp-redirect-uri" class="mono acc" style="padding:8px 10px;background:var(--ink);border:1px solid var(--line);user-select:all"></div>
+        <div>3. Dán <strong>Spotify Client ID</strong> của bạn vào ô bên dưới:</div>
+      </div>
+
+      <div>
+        <label class="mono dim" for="sp-client-id" style="display:block;margin-bottom:6px">Spotify Client ID</label>
+        <input
+          id="sp-client-id"
+          class="field-input"
+          type="text"
+          placeholder="Ví dụ: 8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d"
+          autocomplete="off"
+        />
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+        <button id="btn-save-client-id" class="btn-outline" type="button">Lưu Client ID</button>
+        <button id="btn-connect-spotify" class="btn-solid" type="button">Đăng nhập Spotify</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: SPOTIFY CONNECT DEVICE SWITCHER (PHONE <-> LAPTOP) -->
+  <div id="device-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title">
+      <div class="modal-hdr">
+        <h2 id="dev-modal-title" class="modal-title">Thiết bị phát (Điện thoại &amp; Laptop)</h2>
+        <button class="word mono js-close-devices" type="button">Đóng</button>
+      </div>
+
+      <p class="dim" style="font-size:13.5px;line-height:1.5">
+        Chọn thiết bị đầu ra âm thanh. Bạn có thể dùng điện thoại làm điều khiển từ xa để phát nhạc trên Laptop hoặc ngược lại qua Spotify Connect.
+      </p>
+
+      <div id="device-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: STANDALONE APP DOWNLOAD & 1-CLICK PWA INSTALL -->
+  <div id="install-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="inst-modal-title">
+      <div class="modal-hdr">
+        <h2 id="inst-modal-title" class="modal-title">Tải &amp; Cài đặt ứng dụng VANG</h2>
+        <button class="word mono js-close-install" type="button">Đóng</button>
+      </div>
+
+      <p class="dim" style="font-size:13.5px;line-height:1.5">
+        Không cần dùng bất kỳ câu lệnh nào. Bạn có thể cài đặt trực tiếp hoặc tải tệp chạy độc lập về máy:
+      </p>
+
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="device-item" style="cursor:default">
+          <div style="padding-right:12px">
+            <div style="font-size:14.5px;color:var(--paper);font-weight:500">1. Ứng dụng Windows độc lập (VANG.exe)</div>
+            <div class="dim" style="font-size:12.5px;margin-top:3px">
+              Tệp thực thi duy nhất (~100 KB), nhấp đúp chuột là mở cửa sổ ứng dụng riêng biệt trên PC/Laptop.
+            </div>
+          </div>
+          <a href="./VANG.exe" download="VANG.exe" class="btn-solid" style="text-decoration:none;white-space:nowrap">Tải VANG.exe</a>
+        </div>
+
+        <div class="device-item" style="cursor:default">
+          <div style="padding-right:12px">
+            <div style="font-size:14.5px;color:var(--paper);font-weight:500">2. Cài đặt 1 chạm trên Điện thoại &amp; Web (PWA)</div>
+            <div class="dim" style="font-size:12.5px;margin-top:3px">
+              Thêm biểu tượng VANG vào màn hình chính iOS, Android, macOS hoặc Windows.
+            </div>
+          </div>
+          <button id="btn-pwa-install" class="btn-outline" type="button" style="white-space:nowrap">Cài đặt ngay</button>
+        </div>
+
+        <div class="device-item" style="cursor:default">
+          <div style="padding-right:12px">
+            <div style="font-size:14.5px;color:var(--paper);font-weight:500">3. Bản Offline chạy mọi thiết bị (.html)</div>
+            <div class="dim" style="font-size:12.5px;margin-top:3px">
+              Tải 1 tệp duy nhất tích hợp sẵn toàn bộ đồ họa 3D và bộ phát âm thanh để mở mọi lúc.
+            </div>
+          </div>
+          <a href="./index.html" download="VANG-Player.html" class="btn-outline" style="text-decoration:none;white-space:nowrap">Tải bản Offline</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+// ===== VANG AUDIO ENGINE =====
+// 1. WebAudio Synthesizer (plays procedural ambient/electronic music in Demo Mode so the player produces real sound out of the box)
+// 2. Live FFT Analyser (analyses either the internal synth, microphone/system loopback, or beat-synced Spotify envelope)
+
+const AudioEngine = (function () {
+  let ctx = null;
+  let analyser = null;
+  let masterGain = null;
+  let micStream = null;
+  let micSource = null;
+  let fftData = null;
+  let sourceMode = 'auto'; // 'auto' | 'mic'
+  let volume = 0.72;
+  let muted = false;
+
+  // Procedural Demo Synth state
+  let synthTimer = null;
+  let stepIdx = 0;
+
+  // Smoothed frequency band outputs (0.0 -> 1.0)
+  const bands = { bass: 0.04, mid: 0.05, high: 0.02, energy: 0.04 };
+
+  function ensureContext() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.78;
+      fftData = new Uint8Array(analyser.frequencyBinCount);
+
+      masterGain = ctx.createGain();
+      masterGain.gain.value = muted ? 0 : volume;
+      masterGain.connect(analyser);
+      analyser.connect(ctx.destination);
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    return ctx;
+  }
+
+  // Trigger a warm analog kick + chord + hi-hat step for Demo Mode playback
+  function triggerDemoStep(track, step) {
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    const bpm = track.bpm || 112;
+    const stepDur = 60 / bpm / 2; // 8th note steps
+    const root = track.rootHz || 110;
+
+    // Kick on 0, 3, 4, 6 (syncopated electronic pattern)
+    if (step % 8 === 0 || step % 8 === 3 || step % 8 === 6) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(root * 1.35, now);
+      osc.frequency.exponentialRampToValueAtTime(36, now + 0.16);
+      g.gain.setValueAtTime(0.42, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    }
+
+    // Warm sub-bass & mid pad chord on beat
+    if (step % 4 === 0) {
+      const ratios = track.chord || [1, 1.2, 1.5, 1.8];
+      const r = ratios[(step / 4) % ratios.length];
+      const osc = ctx.createOscillator();
+      const flt = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(root * 2 * r, now);
+      flt.type = 'lowpass';
+      flt.frequency.setValueAtTime(920 + (step % 16) * 65, now);
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.14, now + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now + stepDur * 3.5);
+      osc.connect(flt);
+      flt.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + stepDur * 3.6);
+    }
+
+    // Crisp hi-hat / shimmer on off-beats
+    if (step % 2 === 1) {
+      const bufSize = Math.floor(ctx.sampleRate * 0.045);
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.3));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'highpass';
+      flt.frequency.value = 5200;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.09, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+      noise.connect(flt);
+      flt.connect(g);
+      g.connect(masterGain);
+      noise.start(now);
+    }
+  }
+
+  function startDemoSynth(getTrackFn, isPlayingFn) {
+    stopDemoSynth();
+    const tick = () => {
+      const tr = getTrackFn();
+      const bpm = (tr && tr.bpm) || 112;
+      const ms = (60 / bpm / 2) * 1000;
+      if (isPlayingFn() && !AppState.spotifyActive) {
+        ensureContext();
+        triggerDemoStep(tr, stepIdx++);
+      }
+      synthTimer = setTimeout(tick, ms);
+    };
+    synthTimer = setTimeout(tick, 120);
+  }
+
+  function stopDemoSynth() {
+    if (synthTimer) {
+      clearTimeout(synthTimer);
+      synthTimer = null;
+    }
+  }
+
+  async function toggleMicInput() {
+    if (sourceMode === 'mic') {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (micSource) {
+        try { micSource.disconnect(); } catch (e) {}
+        micSource = null;
+      }
+      sourceMode = 'auto';
+      return sourceMode;
+    }
+    try {
+      ensureContext();
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micSource = ctx.createMediaStreamSource(micStream);
+      micSource.connect(analyser);
+      sourceMode = 'mic';
+      return sourceMode;
+    } catch (err) {
+      sourceMode = 'auto';
+      throw err;
+    }
+  }
+
+  function setVolume(val) {
+    volume = Math.max(0, Math.min(1, val));
+    if (masterGain && ctx) {
+      masterGain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime);
+    }
+    return volume;
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    if (masterGain && ctx) {
+      masterGain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime);
+    }
+    return muted;
+  }
+
+  // Update bands every animation frame (dt in seconds)
+  function sampleBands(dt, isPlaying, simTime, bpm) {
+    let targetBass = 0.04;
+    let targetMid = 0.05;
+    let targetHigh = 0.02;
+
+    let gotFFT = false;
+    if (analyser && fftData && (isPlaying || sourceMode === 'mic') && ctx && ctx.state === 'running') {
+      analyser.getByteFrequencyData(fftData);
+      let bSum = 0, mSum = 0, hSum = 0;
+      for (let i = 1; i <= 10; i++) bSum += fftData[i];
+      for (let i = 11; i <= 55; i++) mSum += fftData[i];
+      for (let i = 56; i <= 140; i++) hSum += fftData[i];
+      if (bSum + mSum + hSum > 15) {
+        targetBass = Math.min(1, (bSum / 10) / 215);
+        targetMid = Math.min(1, (mSum / 45) / 170);
+        targetHigh = Math.min(1, (hSum / 85) / 135);
+        gotFFT = true;
+      }
+    }
+
+    // Fallback or hybrid beat-sync envelope (e.g. when Spotify plays on remote device or autoplay is blocked before first gesture)
+    if (!gotFFT && isPlaying) {
+      const tempo = bpm || 114;
+      const beat = simTime * (tempo / 60);
+      const kick = Math.exp(-((beat % 1) * 5.2));
+      const snare = Math.exp(-(((beat + 0.5) % 1) * 7.0));
+      const hat = Math.exp(-(((beat * 2 + 0.25) % 1) * 9.5));
+      targetBass = 0.20 + 0.78 * kick;
+      targetMid = 0.30 + 0.26 * Math.sin(simTime * 1.4) + 0.25 * snare;
+      targetHigh = 0.16 + 0.68 * hat;
+    }
+
+    const smooth = (cur, tgt) => {
+      const rate = tgt > cur ? 22 : 6.5;
+      return cur + (tgt - cur) * Math.min(1, dt * rate);
+    };
+
+    bands.bass = smooth(bands.bass, targetBass);
+    bands.mid = smooth(bands.mid, targetMid);
+    bands.high = smooth(bands.high, targetHigh);
+    bands.energy = (bands.bass * 0.5 + bands.mid * 0.35 + bands.high * 0.15);
+    return bands;
+  }
+
+  return {
+    ensureContext,
+    startDemoSynth,
+    stopDemoSynth,
+    toggleMicInput,
+    setVolume,
+    toggleMute,
+    sampleBands,
+    getVolume: () => volume,
+    isMuted: () => muted,
+    getSourceMode: () => sourceMode,
+    bands
+  };
+})();
+
+
+// ===== VANG 3D AUDIO VISUALIZER =====
+// Mode 1 ('cluster'): "Khối đốm hạt" — 3D Particle Cluster Sculpture (2,800 glowing organic particles arranged on a golden-spiral 3D sphere + inner core, deformed in 3D space by Bass/Mid/High frequencies with depth-of-field bokeh, core filaments, and interactive orbit).
+// Mode 2 ('ridge'): "Địa hình" — 3D Topographic Frequency Ridgelines (36 stacked horizon lines with active time-cursor ridge in album accent color).
+// Mode 3 ('vortex'): "Xoáy hạt" — Orbital Harmonic Ring Field (particles orbiting in 3D toroidal rings that tilt and pulse with the music).
+
+const Visualizer3D = (function () {
+  let canvas = null;
+  let ctx = null;
+  let mode = 'cluster'; // 'cluster' | 'ridge' | 'vortex'
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+
+  // Interactive camera rotation (drag stage to rotate the 3D particle cluster)
+  let rotY = 0;
+  let rotX = 0.22;
+  let userYaw = 0;
+  let userPitch = 0;
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  // Precomputed 3D particle nodes for "Khối đốm hạt" (Fibonacci sphere + inner shells)
+  const NUM_PARTICLES = 2400;
+  const particles = [];
+
+  function initParticles() {
+    particles.length = 0;
+    const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      const t = i / (NUM_PARTICLES - 1);
+      const y = 1 - t * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = phi * i;
+
+      // 3 shells: outer surface (72%), mid-cluster (20%), dense core (8%)
+      const shellRoll = (i * 2654435761) % 100;
+      const shell = shellRoll < 72 ? 1.0 : shellRoll < 92 ? 0.68 : 0.36;
+      const baseSize = shell === 1.0 ? 1.55 + (i % 5) * 0.32 : shell === 0.68 ? 1.2 : 2.1;
+
+      particles.push({
+        bx: Math.cos(theta) * r,
+        by: y,
+        bz: Math.sin(theta) * r,
+        shell,
+        seed: (i * 0.137) % (Math.PI * 2),
+        size: baseSize,
+        ringAngle: (i / NUM_PARTICLES) * Math.PI * 2 * 12,
+        ringRadius: 0.45 + (i / NUM_PARTICLES) * 1.15
+      });
+    }
+  }
+
+  function mount(stageEl) {
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      ctx = canvas.getContext('2d');
+      initParticles();
+      bindPointer(stageEl);
+    }
+    stageEl.prepend(canvas);
+    resize();
+  }
+
+  function bindPointer(el) {
+    el.addEventListener('pointerdown', e => {
+      if (e.target.closest('button, input, a')) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+    window.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      userYaw += dx * 0.006;
+      userPitch = Math.max(-0.85, Math.min(0.85, userPitch + dy * 0.006));
+    });
+    window.addEventListener('pointerup', () => {
+      dragging = false;
+    });
+  }
+
+  function resize() {
+    if (!canvas || !canvas.parentElement) return;
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    width = canvas.parentElement.clientWidth || 800;
+    height = canvas.parentElement.clientHeight || 600;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+
+  // Smooth 3D harmonic field displacement (simulates 3D simplex noise cleanly at 60fps)
+  function displace3D(x, y, z, t, bass, mid, high) {
+    const n1 = Math.sin(x * 2.7 + t * 1.4) * Math.cos(y * 2.5 - t * 1.1) * Math.sin(z * 2.9 + t * 0.9);
+    const n2 = Math.sin(x * 5.3 - t * 2.2 + y * 3.1) * Math.cos(z * 4.8 + t * 1.9);
+    const ripple = Math.sin((x * x + y * y) * 11.0 - t * 5.5) * high * 0.14;
+    return 1.0 + bass * 0.24 + n1 * (0.22 + mid * 0.48) + n2 * (0.08 + high * 0.22) + ripple;
+  }
+
+  // Render Mode 1: "Khối đốm hạt" (3D Particle Cluster Sculpture)
+  function drawCluster(time, bands, acc, isMobile) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w * 0.5;
+    const cy = h * (isMobile ? 0.44 : 0.45);
+    const scale = Math.min(w, h) * (isMobile ? 0.31 : 0.30);
+
+    // Clear with deep warm ink + subtle radial ambient glow
+    ctx.fillStyle = '#0E0D0B';
+    ctx.fillRect(0, 0, w, h);
+
+    const glowR = scale * (1.55 + bands.bass * 0.45);
+    const grad = ctx.createRadialGradient(cx, cy, scale * 0.05, cx, cy, glowR);
+    grad.addColorStop(0, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, ${0.18 + bands.bass * 0.16})`);
+    grad.addColorStop(0.55, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, 0.04)`);
+    grad.addColorStop(1, 'rgba(14, 13, 11, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const yaw = rotY + userYaw;
+    const pitch = rotX + userPitch + Math.sin(time * 0.35) * 0.12;
+    const cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
+    const cpitch = Math.cos(pitch), spitch = Math.sin(pitch);
+
+    const fov = 3.2;
+    const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
+
+    // Project all particles and bucket by depth so back-to-front rendering is fast
+    const projected = new Array(NUM_PARTICLES);
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      const p = particles[i];
+      const disp = displace3D(p.bx, p.by, p.bz, time, bands.bass, bands.mid, bands.high);
+      const rad = p.shell * disp;
+
+      // Subtle tangential swirl on high frequencies
+      const swirl = bands.high * 0.08 * Math.sin(time * 3 + p.seed);
+      const px = p.bx * rad - p.bz * swirl;
+      const py = p.by * rad;
+      const pz = p.bz * rad + p.bx * swirl;
+
+      // Rotate around Y then X
+      const x1 = px * cyaw - pz * syaw;
+      const z1 = px * syaw + pz * cyaw;
+      const y2 = py * cpitch - z1 * spitch;
+      const z2 = py * spitch + z1 * cpitch;
+
+      const persp = fov / (fov + z2 + 1.85);
+      const sx = cx + x1 * scale * persp * 1.45;
+      const sy = cy + y2 * scale * persp * 1.45;
+
+      projected[i] = {
+        sx,
+        sy,
+        z: z2,
+        persp,
+        disp,
+        size: p.size,
+        shell: p.shell,
+        seed: p.seed
+      };
+    }
+
+    // Sort back-to-front (largest z is furthest away)
+    projected.sort((a, b) => b.z - a.z);
+
+    // Draw particles with depth-of-field bokeh and rim-light coloring
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      const pt = projected[i];
+      // Normalized depth: 0 (back) -> 1 (front)
+      const depthNorm = Math.max(0, Math.min(1, (1.3 - pt.z) / 2.6));
+      const peakFactor = Math.max(0, Math.min(1, (pt.disp - 0.92) * 1.85));
+
+      // Color blend between warm paper (#ECE5D8) and album accent color on crests & front rim
+      const mix = Math.min(1, peakFactor * 0.85 + (pt.shell < 0.5 ? 0.65 : 0) + bands.bass * 0.25);
+      const r = Math.round(236 * (1 - mix) + ar * mix);
+      const g = Math.round(229 * (1 - mix) + ag * mix);
+      const b = Math.round(216 * (1 - mix) + ab * mix);
+
+      const alpha = (0.14 + Math.pow(depthNorm, 1.45) * 0.78) * (pt.shell === 1.0 ? 1.0 : 0.72);
+      const radius = (pt.size * dpr * pt.persp * (0.85 + bands.bass * 0.45 + peakFactor * 0.35));
+
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(pt.sx, pt.sy, Math.max(0.7 * dpr, radius), 0, Math.PI * 2);
+      ctx.fill();
+
+      // Soft outer halo on bright front crest particles
+      if (depthNorm > 0.76 && peakFactor > 0.52 && (i % 6 === 0)) {
+        ctx.fillStyle = `rgba(${ar}, ${ag}, ${ab}, ${(alpha * 0.22).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(pt.sx, pt.sy, radius * 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Render Mode 2: "Địa hình" (Topographic Ridgelines)
+  function drawRidge(time, bands, acc, progressRatio, isMobile) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const N = 34;
+    const top = h * 0.14;
+    const bot = h * (isMobile ? 0.76 : 0.68);
+    const st = (bot - top) / N;
+    const active = Math.floor(Math.max(0, Math.min(0.999, progressRatio)) * N);
+
+    ctx.fillStyle = '#0E0D0B';
+    ctx.fillRect(0, 0, w, h);
+
+    for (let k = 0; k < N; k++) {
+      const y0 = top + k * st;
+      const pts = [];
+      for (let x = 0; x <= w; x += 4 * dpr) {
+        const u = x / w;
+        const env = Math.exp(-Math.pow((u - 0.5) / 0.19, 2));
+        const n =
+          Math.sin(u * 23 + k * 1.7 + time * 1.3) * 0.5 +
+          Math.sin(u * 51 - k * 0.9 + time * 2.1) * 0.3 +
+          Math.sin(u * 9 + k * 0.4 - time * 0.6) * 0.6;
+        const amp = env * (16 + bands.bass * 62 * (0.5 + 0.5 * Math.sin(k * 0.8 + time)) + bands.mid * 28) * (h / 560);
+        const y = y0 - Math.max(0, n * 0.5 + 0.6) * amp - env * bands.high * 5.5 * dpr * Math.sin(u * 120 + time * 8);
+        pts.push([x, y]);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      for (let j = 0; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]);
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fillStyle = '#0E0D0B';
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let j = 0; j < pts.length; j++) {
+        if (j === 0) ctx.moveTo(pts[j][0], pts[j][1]);
+        else ctx.lineTo(pts[j][0], pts[j][1]);
+      }
+      if (k === active) {
+        ctx.strokeStyle = `rgb(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])})`;
+        ctx.lineWidth = 2.0 * dpr;
+      } else {
+        ctx.strokeStyle = `rgba(236, 229, 216, ${(0.20 + 0.58 * (k / N)).toFixed(3)})`;
+        ctx.lineWidth = 1.1 * dpr;
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Render Mode 3: "Xoáy hạt" (3D Orbital Harmonic Vortex)
+  function drawVortex(time, bands, acc, isMobile) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w * 0.5;
+    const cy = h * (isMobile ? 0.44 : 0.45);
+    const scale = Math.min(w, h) * 0.32;
+
+    ctx.fillStyle = '#0E0D0B';
+    ctx.fillRect(0, 0, w, h);
+
+    const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
+    const tiltX = 0.62 + userPitch * 0.6 + Math.sin(time * 0.4) * 0.12;
+    const tiltY = userYaw + time * 0.18;
+    const ctX = Math.cos(tiltX), stX = Math.sin(tiltX);
+    const ctY = Math.cos(tiltY), stY = Math.sin(tiltY);
+
+    for (let i = 0; i < NUM_PARTICLES; i += 2) {
+      const p = particles[i];
+      const ang = p.ringAngle + time * (0.45 + (1.6 - p.ringRadius) * 0.35);
+      const wave = Math.sin(ang * 3 + time * 2.2) * (0.06 + bands.mid * 0.18);
+      const r = p.ringRadius * (0.85 + bands.bass * 0.25);
+
+      const x0 = Math.cos(ang) * r;
+      const z0 = Math.sin(ang) * r;
+      const y0 = wave + Math.cos(ang * 5 - time * 3) * bands.high * 0.12;
+
+      const x1 = x0 * ctY - z0 * stY;
+      const z1 = x0 * stY + z0 * ctY;
+      const y2 = y0 * ctX - z1 * stX;
+      const z2 = y0 * stX + z1 * ctX;
+
+      const persp = 3.0 / (3.0 + z2 + 1.8);
+      const sx = cx + x1 * scale * persp * 1.4;
+      const sy = cy + y2 * scale * persp * 1.4;
+
+      const depth = Math.max(0.1, Math.min(1, (1.4 - z2) / 2.8));
+      const isAcc = (i % 7 === 0);
+      ctx.fillStyle = isAcc
+        ? `rgba(${ar}, ${ag}, ${ab}, ${(depth * 0.9).toFixed(3)})`
+        : `rgba(236, 229, 216, ${(depth * 0.65).toFixed(3)})`;
+
+      const rad = Math.max(0.8 * dpr, p.size * 0.9 * dpr * persp * (0.9 + bands.bass * 0.4));
+      ctx.beginPath();
+      ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function renderFrame(dt, time, bands, acc, progressRatio, isPlaying) {
+    if (!canvas || !ctx) return;
+    rotY += dt * (isPlaying ? 0.26 + bands.bass * 0.18 : 0.07);
+    const isMobile = window.innerWidth <= 900;
+
+    if (mode === 'cluster') {
+      drawCluster(time, bands, acc, isMobile);
+    } else if (mode === 'ridge') {
+      drawRidge(time, bands, acc, progressRatio, isMobile);
+    } else {
+      drawVortex(time, bands, acc, isMobile);
+    }
+  }
+
+  function setMode(m) {
+    if (['cluster', 'ridge', 'vortex'].includes(m)) {
+      mode = m;
+    }
+    return mode;
+  }
+
+  function nextMode() {
+    const order = ['cluster', 'ridge', 'vortex'];
+    mode = order[(order.indexOf(mode) + 1) % order.length];
+    return mode;
+  }
+
+  return {
+    mount,
+    resize,
+    renderFrame,
+    setMode,
+    nextMode,
+    getMode: () => mode
+  };
+})();
+
+
+// ===== VANG SPOTIFY CLIENT (OAuth 2.0 PKCE + Web Playback SDK + Connect REST API) =====
+// Works without any backend secret. Stores token and user-configured Client ID in localStorage.
+
+const SpotifyClient = (function () {
+  const LS_CLIENT_ID = 'vang_spotify_client_id';
+  const LS_VERIFIER = 'vang_spotify_verifier';
+  const LS_TOKEN = 'vang_spotify_token';
+
+  const SCOPES = [
+    'streaming',
+    'user-read-email',
+    'user-read-private',
+    'user-read-playback-state',
+    'user-modify-playback-state',
+    'user-read-currently-playing',
+    'user-library-read',
+    'user-read-recently-played',
+    'playlist-read-private',
+    'playlist-read-collaborative'
+  ].join(' ');
+
+  let sdkPlayer = null;
+  let webDeviceId = null;
+
+  function getClientId() {
+    return (localStorage.getItem(LS_CLIENT_ID) || '').trim();
+  }
+
+  function setClientId(id) {
+    localStorage.setItem(LS_CLIENT_ID, (id || '').trim());
+  }
+
+  function getRedirectUri() {
+    return window.location.origin + window.location.pathname;
+  }
+
+  function getSavedToken() {
+    try {
+      const raw = localStorage.getItem(LS_TOKEN);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveToken(res) {
+    const prev = getSavedToken() || {};
+    const payload = {
+      access_token: res.access_token,
+      refresh_token: res.refresh_token || prev.refresh_token,
+      expires_at: Date.now() + (res.expires_in || 3600) * 1000 - 60000
+    };
+    localStorage.setItem(LS_TOKEN, JSON.stringify(payload));
+    return payload;
+  }
+
+  function logout() {
+    localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_VERIFIER);
+    if (sdkPlayer) {
+      try { sdkPlayer.disconnect(); } catch (e) {}
+      sdkPlayer = null;
+    }
+    webDeviceId = null;
+  }
+
+  // PKCE helpers
+  function randomString(len) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    const arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, x => chars[x % chars.length]).join('');
+  }
+
+  async function sha256Base64Url(plain) {
+    const data = new TextEncoder().encode(plain);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    const bytes = new Uint8Array(digest);
+    let bin = '';
+    bytes.forEach(b => (bin += String.fromCharCode(b)));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function startLogin(customClientId) {
+    if (customClientId !== undefined) setClientId(customClientId);
+    const clientId = getClientId();
+    if (!clientId) {
+      throw new Error('Vui lòng nhập Spotify Client ID trước khi kết nối.');
+    }
+    const verifier = randomString(64);
+    localStorage.setItem(LS_VERIFIER, verifier);
+    const challenge = await sha256Base64Url(verifier);
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: getRedirectUri(),
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      scope: SCOPES
+    });
+    window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+  }
+
+  async function handleCallbackIfPresent() {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
+    if (error) {
+      window.history.replaceState({}, document.title, getRedirectUri());
+      throw new Error('Spotify từ chối kết nối: ' + error);
+    }
+    if (!code) return false;
+
+    const verifier = localStorage.getItem(LS_VERIFIER);
+    const clientId = getClientId();
+    window.history.replaceState({}, document.title, getRedirectUri());
+    if (!verifier || !clientId) return false;
+
+    const body = new URLSearchParams({
+      client_id: clientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: getRedirectUri(),
+      code_verifier: verifier
+    });
+
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+    if (!resp.ok) {
+      throw new Error('Không thể đổi mã đăng nhập Spotify.');
+    }
+    const json = await resp.json();
+    saveToken(json);
+    return true;
+  }
+
+  async function ensureValidToken() {
+    const tok = getSavedToken();
+    if (!tok || !tok.access_token) return null;
+    if (Date.now() < tok.expires_at) return tok.access_token;
+
+    if (!tok.refresh_token || !getClientId()) {
+      logout();
+      return null;
+    }
+
+    try {
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: tok.refresh_token,
+        client_id: getClientId()
+      });
+      const resp = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      if (!resp.ok) {
+        logout();
+        return null;
+      }
+      const json = await resp.json();
+      return saveToken(json).access_token;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function api(path, options = {}) {
+    const token = await ensureValidToken();
+    if (!token) throw new Error('Chưa kết nối Spotify');
+    const resp = await fetch('https://api.spotify.com/v1' + path, {
+      ...options,
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
+    });
+    if (resp.status === 204) return null;
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      throw new Error(`Spotify API (${resp.status}): ${txt.slice(0, 80)}`);
+    }
+    return resp.json().catch(() => null);
+  }
+
+  // Extract dominant warm/vibrant RGB color from an album cover URL (falls back to warm amber)
+  function extractCoverColor(imgUrl) {
+    return new Promise(resolve => {
+      if (!imgUrl) return resolve([217, 130, 43]);
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = 24;
+          cv.height = 24;
+          const c = cv.getContext('2d');
+          c.drawImage(img, 0, 0, 24, 24);
+          const d = c.getImageData(0, 0, 24, 24).data;
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const br = (d[i] + d[i + 1] + d[i + 2]) / 3;
+            if (br > 38 && br < 235) {
+              r += d[i];
+              g += d[i + 1];
+              b += d[i + 2];
+              count++;
+            }
+          }
+          if (count > 0) {
+            resolve([Math.round(r / count), Math.round(g / count), Math.round(b / count)]);
+          } else {
+            resolve([217, 130, 43]);
+          }
+        } catch (e) {
+          resolve([217, 130, 43]);
+        }
+      };
+      img.onerror = () => resolve([217, 130, 43]);
+      img.src = imgUrl;
+    });
+  }
+
+  function mapSpotifyTrack(item) {
+    const t = item && item.track ? item.track : item;
+    if (!t || !t.id) return null;
+    const img = (t.album && t.album.images && t.album.images[0] && t.album.images[0].url) || '';
+    return {
+      id: t.id,
+      uri: t.uri,
+      t: t.name || 'Không rõ tên',
+      a: (t.artists || []).map(x => x.name).join(', ') || 'Nghệ sĩ',
+      al: (t.album && t.album.name) || 'Album',
+      d: Math.max(1, Math.round((t.duration_ms || 180000) / 1000)),
+      cover: img,
+      c: [217, 130, 43],
+      bpm: 116
+    };
+  }
+
+  async function fetchProfile() {
+    return api('/me');
+  }
+
+  async function fetchLikedTracks() {
+    const data = await api('/me/tracks?limit=30');
+    return ((data && data.items) || []).map(mapSpotifyTrack).filter(Boolean);
+  }
+
+  async function fetchRecentTracks() {
+    const data = await api('/me/player/recently-played?limit=30');
+    const seen = new Set();
+    const list = [];
+    ((data && data.items) || []).forEach(it => {
+      const m = mapSpotifyTrack(it.track);
+      if (m && !seen.has(m.id)) {
+        seen.add(m.id);
+        list.push(m);
+      }
+    });
+    return list;
+  }
+
+  async function fetchPlaylists() {
+    const data = await api('/me/playlists?limit=20');
+    return ((data && data.items) || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      count: (p.tracks && p.tracks.total) || 0,
+      cover: (p.images && p.images[0] && p.images[0].url) || ''
+    }));
+  }
+
+  async function fetchPlaylistTracks(playlistId) {
+    const data = await api(`/playlists/${playlistId}/tracks?limit=40`);
+    return ((data && data.items) || []).map(mapSpotifyTrack).filter(Boolean);
+  }
+
+  async function searchTracks(query) {
+    if (!query.trim()) return [];
+    const q = encodeURIComponent(query.trim());
+    const data = await api(`/search?type=track&limit=25&q=${q}`);
+    return ((data && data.tracks && data.tracks.items) || []).map(mapSpotifyTrack).filter(Boolean);
+  }
+
+  async function fetchDevices() {
+    const data = await api('/me/player/devices');
+    return (data && data.devices) || [];
+  }
+
+  async function transferPlayback(deviceId, play = true) {
+    return api('/me/player', {
+      method: 'PUT',
+      body: JSON.stringify({ device_ids: [deviceId], play })
+    });
+  }
+
+  async function playUris(uris, offsetIndex = 0, deviceId = null) {
+    const q = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '';
+    return api('/me/player/play' + q, {
+      method: 'PUT',
+      body: JSON.stringify({
+        uris,
+        offset: { position: offsetIndex }
+      })
+    });
+  }
+
+  async function pausePlayback() {
+    return api('/me/player/pause', { method: 'PUT' });
+  }
+
+  async function resumePlayback() {
+    return api('/me/player/play', { method: 'PUT' });
+  }
+
+  async function nextTrack() {
+    return api('/me/player/next', { method: 'POST' });
+  }
+
+  async function prevTrack() {
+    return api('/me/player/previous', { method: 'POST' });
+  }
+
+  async function seekPosition(sec) {
+    return api(`/me/player/seek?position_ms=${Math.round(sec * 1000)}`, { method: 'PUT' });
+  }
+
+  async function setRemoteVolume(pct) {
+    return api(`/me/player/volume?volume_percent=${Math.round(pct)}`, { method: 'PUT' });
+  }
+
+  // Initialize Spotify Web Playback SDK on desktop browsers
+  function initWebPlaybackSDK(onStateChange, onReadyDevice) {
+    ensureValidToken().then(token => {
+      if (!token) return;
+      if (!document.getElementById('spotify-sdk-script')) {
+        const s = document.createElement('script');
+        s.id = 'spotify-sdk-script';
+        s.src = 'https://sdk.scdn.co/spotify-player.js';
+        s.async = true;
+        document.body.appendChild(s);
+      }
+      window.onSpotifyWebPlaybackSDKReady = () => {
+        if (!window.Spotify) return;
+        sdkPlayer = new window.Spotify.Player({
+          name: 'Vang · 3D Audio Player',
+          getOAuthToken: cb => {
+            ensureValidToken().then(t => cb(t || ''));
+          },
+          volume: 0.75
+        });
+        sdkPlayer.addListener('ready', ({ device_id }) => {
+          webDeviceId = device_id;
+          if (onReadyDevice) onReadyDevice(device_id);
+        });
+        sdkPlayer.addListener('player_state_changed', st => {
+          if (st && onStateChange) onStateChange(st);
+        });
+        sdkPlayer.connect();
+      };
+    });
+  }
+
+  return {
+    getClientId,
+    setClientId,
+    getRedirectUri,
+    hasToken: () => !!(getSavedToken() && getSavedToken().access_token),
+    startLogin,
+    handleCallbackIfPresent,
+    logout,
+    extractCoverColor,
+    fetchProfile,
+    fetchLikedTracks,
+    fetchRecentTracks,
+    fetchPlaylists,
+    fetchPlaylistTracks,
+    searchTracks,
+    fetchDevices,
+    transferPlayback,
+    playUris,
+    pausePlayback,
+    resumePlayback,
+    nextTrack,
+    prevTrack,
+    seekPosition,
+    setRemoteVolume,
+    initWebPlaybackSDK,
+    getWebDeviceId: () => webDeviceId
+  };
+})();
+
+
+// ===== VANG APPLICATION CONTROLLER =====
+
+const DEMO_TRACKS = [
+  {
+    id: 'demo-1',
+    t: 'Đèn Đường Lúc Ba Giờ',
+    a: 'Nhóm Gác Mái',
+    al: 'Phố Không Ngủ · 2024',
+    d: 252,
+    c: [217, 130, 43],
+    bpm: 112,
+    rootHz: 110,
+    chord: [1, 1.2, 1.5, 1.8],
+    g: 'linear-gradient(135deg,#D9822B 0 45%,#2A2420 45% 100%)',
+    liked: true
+  },
+  {
+    id: 'demo-2',
+    t: 'Salt & Static',
+    a: 'Ines Harbour',
+    al: 'Coastal Noise · 2023',
+    d: 221,
+    c: [120, 146, 180],
+    bpm: 120,
+    rootHz: 98,
+    chord: [1, 1.25, 1.5, 1.875],
+    g: 'radial-gradient(circle at 30% 35%,#C9D3DE 0 18%,#6F86A6 19% 60%,#1E2630 61%)',
+    liked: true
+  },
+  {
+    id: 'demo-3',
+    t: 'Mưa Phố Cũ',
+    a: 'Lê Vân Khê',
+    al: 'Hà Nội, Tháng Ba · 2022',
+    d: 303,
+    c: [196, 78, 50],
+    bpm: 96,
+    rootHz: 82.4,
+    chord: [1, 1.189, 1.498, 1.681],
+    g: 'linear-gradient(180deg,#B5452B 0 30%,#ECE5D8 30% 34%,#3A1F18 34%)',
+    liked: false
+  },
+  {
+    id: 'demo-4',
+    t: 'Low Orbit',
+    a: 'Kaito Fern',
+    al: 'Satellites · 2025',
+    d: 198,
+    c: [160, 166, 74],
+    bpm: 126,
+    rootHz: 123.5,
+    chord: [1, 1.33, 1.5, 2.0],
+    g: 'conic-gradient(from 200deg,#8A8F3C,#2B2D16,#C8C99A,#8A8F3C)',
+    liked: true
+  },
+  {
+    id: 'demo-5',
+    t: 'Giấc Ngủ Muộn',
+    a: 'Nhóm Gác Mái',
+    al: 'Phố Không Ngủ · 2024',
+    d: 287,
+    c: [196, 160, 104],
+    bpm: 104,
+    rootHz: 103.8,
+    chord: [1, 1.2, 1.498, 1.78],
+    g: 'linear-gradient(90deg,#1A1714 0 50%,#C4A068 50%)',
+    liked: false
+  },
+  {
+    id: 'demo-6',
+    t: 'Tín Hiệu Đêm Đông',
+    a: 'Minh Vũ · Analog Lab',
+    al: 'Sóng Ngầm · 2025',
+    d: 244,
+    c: [92, 174, 152],
+    bpm: 118,
+    rootHz: 116.5,
+    chord: [1, 1.25, 1.5, 1.75],
+    g: 'linear-gradient(150deg,#5CAE98 0 38%,#142824 38% 100%)',
+    liked: true
+  }
+];
+
+const DEMO_PLAYLISTS = [
+  { id: 'pl-1', name: 'Đêm Trắng Sài Gòn', count: 4, trackIds: ['demo-1', 'demo-3', 'demo-5', 'demo-6'] },
+  { id: 'pl-2', name: 'Ambient & Modular', count: 3, trackIds: ['demo-2', 'demo-4', 'demo-6'] }
+];
+
+// Minimal geometric task icons (Play triangle, Pause bars, Skip, Shuffle, Repeat, Volume)
+const TASK_ICONS = {
+  play: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="4,2.2 13.8,8 4,13.8"/></svg>`,
+  pause: `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="2.5" width="3.2" height="11"/><rect x="9.3" y="2.5" width="3.2" height="11"/></svg>`,
+  prev: `<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2.5" y="3" width="1.8" height="10"/><polygon points="13,3 5.5,8 13,13"/></svg>`,
+  next: `<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="3,3 10.5,8 3,13"/><rect x="11.7" y="3" width="1.8" height="10"/></svg>`,
+  shuffle: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 4.5h3.2l5.6 7H14M14 4.5h-3.2l-2 2.5M12 2.5l2 2-2 2M12 9.5l2 2-2 2"/></svg>`,
+  repeat: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 5h9.5v3M10.5 3l2 2-2 2M13 11H3.5V8M5.5 13l-2-2 2-2"/></svg>`,
+  vol: `<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="2,6 5.5,6 9.5,2.5 9.5,13.5 5.5,10 2,10"/><path d="M11.8 5.2a4.2 4.2 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`,
+  mute: `<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><polygon points="2,6 5.5,6 9.5,2.5 9.5,13.5 5.5,10 2,10"/><path d="M11.5 6l3.5 4M15 6l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`
+};
+
+const AppState = {
+  tracks: DEMO_TRACKS.slice(),
+  allTracks: DEMO_TRACKS.slice(),
+  playlists: DEMO_PLAYLISTS.slice(),
+  idx: 0,
+  pos: 37,
+  playing: false,
+  shuffle: false,
+  repeat: false,
+  tab: 'queue', // 'queue' | 'liked' | 'playlists' | 'recent' | 'search'
+  searchQuery: '',
+  spotifyActive: false,
+  userName: 'Chế độ thử nghiệm',
+  activeDeviceName: 'Trình phát Web · Vang',
+  devices: [
+    { id: 'local-web', name: 'Trình phát Web · Vang (Máy này)', type: 'Computer', is_active: true },
+    { id: 'demo-phone', name: 'iPhone · Spotify Connect', type: 'Smartphone', is_active: false },
+    { id: 'demo-laptop', name: 'Laptop Studio · Spotify Connect', type: 'Computer', is_active: false }
+  ],
+  mobDrawer: null // null | 'left' | 'right'
+};
+
+let currentAcc = DEMO_TRACKS[0].c.slice();
+let simTime = 0;
+let visualTime = 0;
+let lastFrame = performance.now();
+let lastRenderedSec = -1;
+let toastTmr = null;
+
+function fmtTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTmr);
+  toastTmr = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function currentTrack() {
+  return AppState.tracks[AppState.idx] || AppState.allTracks[0] || DEMO_TRACKS[0];
+}
+
+function renderTrackList() {
+  const container = document.getElementById('track-list');
+  if (!container) return;
+
+  if (AppState.tab === 'playlists') {
+    container.innerHTML = AppState.playlists
+      .map(
+        (pl, i) => `
+      <div class="qrow" data-pl="${pl.id}">
+        <span class="mono dim">${String(i + 1).padStart(2, '0')}</span>
+        <div class="art" style="background:${pl.cover ? `url('${pl.cover}') center/cover` : 'linear-gradient(135deg,var(--acc),#221e1a)'}"></div>
+        <div class="truncate">
+          <div class="qt truncate">${pl.name}</div>
+          <div class="qa truncate">${pl.count} bản nhạc</div>
+        </div>
+        <span class="mono dim">Mở</span>
+      </div>`
+      )
+      .join('');
+    container.querySelectorAll('[data-pl]').forEach(row => {
+      row.onclick = () => openPlaylist(row.dataset.pl);
+    });
+    return;
+  }
+
+  let list = AppState.tracks;
+  if (!list.length) {
+    container.innerHTML = `<div class="dim" style="padding:22px 0;font-size:13.5px">Không tìm thấy bản nhạc phù hợp.</div>`;
+    return;
+  }
+
+  const cur = currentTrack();
+  container.innerHTML = list
+    .map((tr, i) => {
+      const isCur = cur && tr.id === cur.id;
+      const artStyle = tr.cover
+        ? `background-image:url('${tr.cover}')`
+        : `background:${tr.g || 'linear-gradient(135deg,#D9822B,#2A2420)'}`;
+      return `
+      <div class="qrow${isCur ? ' cur' : ''}" data-idx="${i}">
+        <span class="mono dim qidx">${String(i + 1).padStart(2, '0')}</span>
+        <div class="art" style="${artStyle}"></div>
+        <div class="truncate">
+          <div class="qt truncate">${tr.t}</div>
+          <div class="qa truncate">${tr.a}</div>
+        </div>
+        <span class="mono dim">${fmtTime(tr.d)}</span>
+      </div>`;
+    })
+    .join('');
+
+  container.querySelectorAll('.qrow[data-idx]').forEach(row => {
+    row.onclick = () => {
+      const i = Number(row.dataset.idx);
+      selectTrack(i, true);
+      if (window.innerWidth <= 900) closeMobileDrawers();
+    };
+  });
+}
+
+async function openPlaylist(plId) {
+  if (AppState.spotifyActive) {
+    try {
+      showToast('Đang tải danh sách phát...');
+      const items = await SpotifyClient.fetchPlaylistTracks(plId);
+      if (items.length) {
+        AppState.tracks = items;
+        AppState.tab = 'queue';
+        syncNavTabs();
+        selectTrack(0, true);
+      }
+      return;
+    } catch (e) {
+      showToast('Không tải được danh sách phát');
+    }
+  }
+  const pl = DEMO_PLAYLISTS.find(p => p.id === plId);
+  if (pl) {
+    AppState.tracks = DEMO_TRACKS.filter(t => pl.trackIds.includes(t.id));
+    AppState.tab = 'queue';
+    syncNavTabs();
+    selectTrack(0, true);
+    showToast('Đã mở: ' + pl.name);
+  }
+}
+
+function renderMetadata() {
+  const tr = currentTrack();
+  if (!tr) return;
+  document.querySelectorAll('.js-title').forEach(el => (el.textContent = tr.t));
+  document.querySelectorAll('.js-artist').forEach(el => (el.textContent = tr.a));
+  document.querySelectorAll('.js-album').forEach(el => (el.textContent = tr.al));
+  document.querySelectorAll('.js-dur').forEach(el => (el.textContent = fmtTime(tr.d)));
+  document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(AppState.pos)));
+
+  if (tr.cover && (!tr.c || tr.c[0] === 217)) {
+    SpotifyClient.extractCoverColor(tr.cover).then(rgb => {
+      tr.c = rgb;
+    });
+  }
+}
+
+function selectTrack(index, autoPlay = false) {
+  if (!AppState.tracks.length) return;
+  AppState.idx = (index + AppState.tracks.length) % AppState.tracks.length;
+  AppState.pos = 0;
+
+  const metaEl = document.querySelector('.stage-meta');
+  if (metaEl) {
+    metaEl.classList.add('swap');
+    setTimeout(() => {
+      renderMetadata();
+      metaEl.classList.remove('swap');
+    }, 280);
+  } else {
+    renderMetadata();
+  }
+
+  renderTrackList();
+
+  const tr = currentTrack();
+  if (AppState.spotifyActive && tr && tr.uri && autoPlay) {
+    const uris = AppState.tracks.map(x => x.uri).filter(Boolean);
+    SpotifyClient.playUris(uris, AppState.idx, SpotifyClient.getWebDeviceId()).catch(() => {});
+  }
+
+  if (autoPlay) {
+    setPlaying(true);
+  }
+}
+
+function setPlaying(playState) {
+  AppState.playing = !!playState;
+  if (AppState.playing) {
+    AudioEngine.ensureContext();
+  }
+
+  if (AppState.spotifyActive) {
+    if (AppState.playing) SpotifyClient.resumePlayback().catch(() => {});
+    else SpotifyClient.pausePlayback().catch(() => {});
+  }
+
+  const iconHTML = AppState.playing ? TASK_ICONS.pause : TASK_ICONS.play;
+  document.querySelectorAll('.js-play').forEach(btn => {
+    btn.innerHTML = iconHTML;
+    btn.setAttribute('aria-label', AppState.playing ? 'Tạm dừng' : 'Phát');
+    btn.dataset.state = AppState.playing ? 'playing' : 'paused';
+  });
+}
+
+function nextTrack() {
+  if (AppState.shuffle && AppState.tracks.length > 1) {
+    let r = AppState.idx;
+    while (r === AppState.idx) {
+      r = Math.floor(Math.random() * AppState.tracks.length);
+    }
+    selectTrack(r, AppState.playing);
+  } else {
+    selectTrack(AppState.idx + 1, AppState.playing);
+  }
+}
+
+function prevTrack() {
+  if (AppState.pos > 4) {
+    AppState.pos = 0;
+    if (AppState.spotifyActive) SpotifyClient.seekPosition(0).catch(() => {});
+    renderMetadata();
+  } else {
+    selectTrack(AppState.idx - 1, AppState.playing);
+  }
+}
+
+function switchTab(tabName) {
+  AppState.tab = tabName;
+  syncNavTabs();
+
+  const searchWrap = document.getElementById('search-wrap');
+  if (searchWrap) {
+    searchWrap.classList.toggle('show', tabName === 'search');
+    if (tabName === 'search') {
+      const inp = document.getElementById('search-input');
+      if (inp) setTimeout(() => inp.focus(), 50);
+    }
+  }
+
+  if (AppState.spotifyActive) {
+    if (tabName === 'liked') {
+      SpotifyClient.fetchLikedTracks().then(list => {
+        if (list.length) {
+          AppState.tracks = list;
+          renderTrackList();
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'recent') {
+      SpotifyClient.fetchRecentTracks().then(list => {
+        if (list.length) {
+          AppState.tracks = list;
+          renderTrackList();
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'playlists') {
+      SpotifyClient.fetchPlaylists().then(pls => {
+        if (pls.length) AppState.playlists = pls;
+        renderTrackList();
+      }).catch(() => renderTrackList());
+      return;
+    }
+  }
+
+  // Demo mode tab filtering
+  if (tabName === 'liked') {
+    AppState.tracks = AppState.allTracks.filter(t => t.liked);
+  } else if (tabName === 'recent') {
+    AppState.tracks = AppState.allTracks.slice().reverse();
+  } else if (tabName === 'search') {
+    filterSearch(AppState.searchQuery);
+    return;
+  } else {
+    AppState.tracks = AppState.allTracks.slice();
+  }
+  renderTrackList();
+}
+
+function syncNavTabs() {
+  document.querySelectorAll('[data-tab]').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.tab === AppState.tab);
+  });
+}
+
+let searchDebounce = null;
+function filterSearch(q) {
+  AppState.searchQuery = q;
+  if (AppState.spotifyActive && q.trim().length >= 2) {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      SpotifyClient.searchTracks(q).then(res => {
+        AppState.tracks = res;
+        renderTrackList();
+      }).catch(() => {});
+    }, 320);
+    return;
+  }
+  const kw = q.trim().toLowerCase();
+  AppState.tracks = !kw
+    ? AppState.allTracks.slice()
+    : AppState.allTracks.filter(
+        t => t.t.toLowerCase().includes(kw) || t.a.toLowerCase().includes(kw) || t.al.toLowerCase().includes(kw)
+      );
+  renderTrackList();
+}
+
+// Visual Mode Switching
+function setVisualMode(m) {
+  const mode = Visualizer3D.setMode(m);
+  document.querySelectorAll('.js-vmode').forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.m === mode);
+  });
+  const labelMap = { cluster: 'Khối đốm hạt', ridge: 'Địa hình', vortex: 'Xoáy hạt' };
+  document.querySelectorAll('.js-vmode-cycle').forEach(btn => {
+    btn.textContent = labelMap[mode] || 'Khối đốm hạt';
+  });
+}
+
+// Modals: Spotify Connect & Device Selector
+function openSpotifyModal() {
+  const m = document.getElementById('spotify-modal');
+  if (!m) return;
+  const inp = document.getElementById('sp-client-id');
+  const redir = document.getElementById('sp-redirect-uri');
+  if (inp) inp.value = SpotifyClient.getClientId();
+  if (redir) redir.textContent = SpotifyClient.getRedirectUri();
+  m.hidden = false;
+}
+
+function closeSpotifyModal() {
+  const m = document.getElementById('spotify-modal');
+  if (m) m.hidden = true;
+}
+
+async function openDeviceModal() {
+  const m = document.getElementById('device-modal');
+  if (!m) return;
+  m.hidden = false;
+  if (AppState.spotifyActive) {
+    try {
+      const devs = await SpotifyClient.fetchDevices();
+      if (devs && devs.length) {
+        AppState.devices = devs;
+      }
+    } catch (e) {}
+  }
+  renderDeviceList();
+}
+
+function closeDeviceModal() {
+  const m = document.getElementById('device-modal');
+  if (m) m.hidden = true;
+}
+
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+function openInstallModal() {
+  const m = document.getElementById('install-modal');
+  if (m) m.hidden = false;
+}
+
+function closeInstallModal() {
+  const m = document.getElementById('install-modal');
+  if (m) m.hidden = true;
+}
+
+async function triggerPwaInstall() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (choice && choice.outcome === 'accepted') {
+      showToast('Đã bắt đầu cài đặt ứng dụng VANG');
+      closeInstallModal();
+    }
+  } else {
+    showToast('Trên trình duyệt này: chọn Menu (⋮ hoặc Chia sẻ) → "Thêm vào màn hình chính / Cài đặt ứng dụng"');
+  }
+}
+
+function renderDeviceList() {
+  const box = document.getElementById('device-list');
+  if (!box) return;
+  box.innerHTML = AppState.devices
+    .map(
+      d => `
+    <div class="device-item${d.is_active ? ' active' : ''}" data-dev="${d.id}">
+      <div>
+        <div style="font-size:14.5px;color:var(--paper)">${d.name}</div>
+        <div class="mono dim" style="margin-top:2px">${d.type === 'Smartphone' ? 'Điện thoại' : 'Máy tính'}</div>
+      </div>
+      <span class="mono ${d.is_active ? 'acc' : 'dim'}">${d.is_active ? 'Đang phát' : 'Chuyển sang'}</span>
+    </div>`
+    )
+    .join('');
+
+  box.querySelectorAll('[data-dev]').forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.dev;
+      AppState.devices.forEach(d => (d.is_active = d.id === id));
+      const chosen = AppState.devices.find(d => d.id === id);
+      if (chosen) {
+        AppState.activeDeviceName = chosen.name;
+        document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = chosen.name));
+      }
+      if (AppState.spotifyActive) {
+        try {
+          await SpotifyClient.transferPlayback(id, true);
+        } catch (e) {}
+      }
+      renderDeviceList();
+      showToast('Đã chuyển âm thanh sang: ' + (chosen ? chosen.name : 'Thiết bị mới'));
+      setTimeout(closeDeviceModal, 350);
+    };
+  });
+}
+
+// Mobile drawers
+function toggleMobileDrawer(which) {
+  const left = document.querySelector('.left-pane');
+  const right = document.querySelector('.right-pane');
+  if (AppState.mobDrawer === which) {
+    AppState.mobDrawer = null;
+  } else {
+    AppState.mobDrawer = which;
+  }
+  if (left) left.classList.toggle('mob-open', AppState.mobDrawer === 'left');
+  if (right) right.classList.toggle('mob-open', AppState.mobDrawer === 'right');
+  document.querySelectorAll('[data-mob-drawer]').forEach(b => {
+    b.classList.toggle('on', b.dataset.mobDrawer === AppState.mobDrawer);
+  });
+}
+
+function closeMobileDrawers() {
+  AppState.mobDrawer = null;
+  const left = document.querySelector('.left-pane');
+  const right = document.querySelector('.right-pane');
+  if (left) left.classList.remove('mob-open');
+  if (right) right.classList.remove('mob-open');
+  document.querySelectorAll('[data-mob-drawer]').forEach(b => b.classList.remove('on'));
+}
+
+// Connect live Spotify account if token exists
+async function initSpotifySession() {
+  try {
+    await SpotifyClient.handleCallbackIfPresent();
+  } catch (err) {
+    showToast(err.message);
+  }
+  if (!SpotifyClient.hasToken()) return;
+
+  try {
+    const profile = await SpotifyClient.fetchProfile();
+    if (profile && profile.display_name) {
+      AppState.spotifyActive = true;
+      AppState.userName = profile.display_name;
+      document.querySelectorAll('.js-user-status').forEach(el => {
+        el.textContent = profile.display_name + ' · Spotify';
+      });
+      showToast('Đã kết nối Spotify: ' + profile.display_name);
+
+      const liked = await SpotifyClient.fetchLikedTracks();
+      if (liked.length) {
+        AppState.allTracks = liked;
+        AppState.tracks = liked.slice();
+        selectTrack(0, false);
+      }
+
+      SpotifyClient.initWebPlaybackSDK(
+        st => {
+          if (!st) return;
+          AppState.playing = !st.paused;
+          AppState.pos = Math.round((st.position || 0) / 1000);
+          const curItem = st.track_window && st.track_window.current_track;
+          if (curItem) {
+            const tr = currentTrack();
+            if (!tr || tr.id !== curItem.id) {
+              renderMetadata();
+            }
+          }
+        },
+        devId => {
+          AppState.activeDeviceName = 'Vang Web Player';
+          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'Vang Web Player'));
+        }
+      );
+    }
+  } catch (e) {
+    AppState.spotifyActive = false;
+  }
+}
+
+// Main Animation Loop (60fps)
+function tickFrame(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+
+  const tr = currentTrack();
+  if (AppState.playing) {
+    AppState.pos += dt;
+    simTime += dt;
+    if (AppState.pos >= tr.d) {
+      if (AppState.repeat) {
+        AppState.pos = 0;
+      } else {
+        nextTrack();
+      }
+    }
+  }
+  visualTime += dt * (AppState.playing ? 1.0 : 0.24);
+
+  const bands = AudioEngine.sampleBands(dt, AppState.playing, simTime, tr.bpm || 112);
+
+  // Smoothly interpolate accent color toward current track's cover color
+  const targetColor = tr.c || [217, 130, 43];
+  for (let i = 0; i < 3; i++) {
+    currentAcc[i] += (targetColor[i] - currentAcc[i]) * Math.min(1, dt * 3.0);
+  }
+  const rgbStr = `${Math.round(currentAcc[0])}, ${Math.round(currentAcc[1])}, ${Math.round(currentAcc[2])}`;
+  document.documentElement.style.setProperty('--acc', `rgb(${rgbStr})`);
+  document.documentElement.style.setProperty('--acc-rgb', rgbStr);
+
+  // Render 3D Audio Stage
+  const progRatio = tr.d > 0 ? AppState.pos / tr.d : 0;
+  Visualizer3D.renderFrame(dt, visualTime, bands, currentAcc, progRatio, AppState.playing);
+
+  // Update Scrubber UI
+  const pct = Math.max(0, Math.min(100, progRatio * 100));
+  document.querySelectorAll('.js-scrub-fill').forEach(el => (el.style.width = pct + '%'));
+  document.querySelectorAll('.js-scrub-head').forEach(el => (el.style.left = pct + '%'));
+
+  const sec = Math.floor(AppState.pos);
+  if (sec !== lastRenderedSec) {
+    lastRenderedSec = sec;
+    document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(AppState.pos)));
+  }
+
+  // Update Signal Meters
+  document.querySelectorAll('.js-mb').forEach(el => (el.style.width = Math.round(bands.bass * 100) + '%'));
+  document.querySelectorAll('.js-mm').forEach(el => (el.style.width = Math.round(bands.mid * 100) + '%'));
+  document.querySelectorAll('.js-mh').forEach(el => (el.style.width = Math.round(bands.high * 100) + '%'));
+  document.querySelectorAll('.js-mb-val').forEach(el => (el.textContent = Math.round(bands.bass * 100)));
+  document.querySelectorAll('.js-mm-val').forEach(el => (el.textContent = Math.round(bands.mid * 100)));
+  document.querySelectorAll('.js-mh-val').forEach(el => (el.textContent = Math.round(bands.high * 100)));
+
+  // Subtle typographic breathing on bass hits
+  const titleEl = document.querySelector('.track-title');
+  if (titleEl) {
+    titleEl.style.letterSpacing = (-0.035 + bands.bass * 0.007).toFixed(4) + 'em';
+  }
+
+  requestAnimationFrame(tickFrame);
+}
+
+// Mount & Wire Event Listeners
+function initApp() {
+  // Inject task icons into transport buttons
+  document.querySelectorAll('.js-prev').forEach(b => (b.innerHTML = TASK_ICONS.prev));
+  document.querySelectorAll('.js-next').forEach(b => (b.innerHTML = TASK_ICONS.next));
+  document.querySelectorAll('.js-shuffle').forEach(b => (b.innerHTML = TASK_ICONS.shuffle));
+  document.querySelectorAll('.js-repeat').forEach(b => (b.innerHTML = TASK_ICONS.repeat));
+  document.querySelectorAll('.js-mute').forEach(b => (b.innerHTML = TASK_ICONS.vol));
+
+  // Mount 3D Stage
+  const stageEl = document.getElementById('main-stage');
+  Visualizer3D.mount(stageEl);
+  window.addEventListener('resize', () => Visualizer3D.resize());
+
+  // Transport controls
+  document.querySelectorAll('.js-play').forEach(b => (b.onclick = () => setPlaying(!AppState.playing)));
+  document.querySelectorAll('.js-next').forEach(b => (b.onclick = () => nextTrack()));
+  document.querySelectorAll('.js-prev').forEach(b => (b.onclick = () => prevTrack()));
+
+  document.querySelectorAll('.js-shuffle').forEach(b => {
+    b.onclick = () => {
+      AppState.shuffle = !AppState.shuffle;
+      document.querySelectorAll('.js-shuffle').forEach(x => x.classList.toggle('on', AppState.shuffle));
+      showToast(AppState.shuffle ? 'Đã bật trộn bài' : 'Đã tắt trộn bài');
+    };
+  });
+
+  document.querySelectorAll('.js-repeat').forEach(b => {
+    b.onclick = () => {
+      AppState.repeat = !AppState.repeat;
+      document.querySelectorAll('.js-repeat').forEach(x => x.classList.toggle('on', AppState.repeat));
+      showToast(AppState.repeat ? 'Lặp lại bài hiện tại' : 'Đã tắt lặp bài');
+    };
+  });
+
+  // Scrubber seek
+  document.querySelectorAll('.js-scrub').forEach(track => {
+    track.onclick = e => {
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const tr = currentTrack();
+      AppState.pos = ratio * tr.d;
+      if (AppState.spotifyActive) SpotifyClient.seekPosition(AppState.pos).catch(() => {});
+      renderMetadata();
+    };
+  });
+
+  // Volume seek & mute
+  document.querySelectorAll('.js-vol-track').forEach(vt => {
+    vt.onclick = e => {
+      const rect = vt.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const v = AudioEngine.setVolume(ratio);
+      document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = Math.round(v * 100) + '%'));
+      document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = Math.round(v * 100)));
+      if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(v * 100).catch(() => {});
+    };
+  });
+
+  document.querySelectorAll('.js-mute').forEach(b => {
+    b.onclick = () => {
+      const m = AudioEngine.toggleMute();
+      document.querySelectorAll('.js-mute').forEach(x => (x.innerHTML = m ? TASK_ICONS.mute : TASK_ICONS.vol));
+    };
+  });
+
+  // Navigation Tabs
+  document.querySelectorAll('[data-tab]').forEach(btn => {
+    btn.onclick = () => switchTab(btn.dataset.tab);
+  });
+
+  const searchInp = document.getElementById('search-input');
+  if (searchInp) {
+    searchInp.oninput = e => filterSearch(e.target.value);
+  }
+
+  // Visualizer Mode Buttons
+  document.querySelectorAll('.js-vmode').forEach(btn => {
+    btn.onclick = () => setVisualMode(btn.dataset.m);
+  });
+
+  document.querySelectorAll('.js-vmode-cycle').forEach(btn => {
+    btn.onclick = () => setVisualMode(Visualizer3D.nextMode());
+  });
+
+  // Audio Signal Source Toggle (Synth/Beat vs. Live Mic/Loopback)
+  document.querySelectorAll('.js-src-mode').forEach(btn => {
+    btn.onclick = async () => {
+      const target = btn.dataset.src;
+      if (target === 'mic' && AudioEngine.getSourceMode() !== 'mic') {
+        try {
+          await AudioEngine.toggleMicInput();
+          showToast('Đã bật thu tín hiệu âm thanh trực tiếp (Micro/Loopback)');
+        } catch (err) {
+          showToast('Không thể mở Micro — giữ chế độ đồng bộ nội bộ');
+        }
+      } else if (target === 'auto' && AudioEngine.getSourceMode() === 'mic') {
+        await AudioEngine.toggleMicInput();
+        showToast('Đã chuyển về chế độ đồng bộ nội bộ');
+      }
+      const curMode = AudioEngine.getSourceMode();
+      document.querySelectorAll('.js-src-mode').forEach(x => x.classList.toggle('on', x.dataset.src === curMode));
+    };
+  });
+
+  // Modals
+  document.querySelectorAll('.js-open-spotify').forEach(b => (b.onclick = openSpotifyModal));
+  document.querySelectorAll('.js-close-spotify').forEach(b => (b.onclick = closeSpotifyModal));
+  document.querySelectorAll('.js-open-devices').forEach(b => (b.onclick = openDeviceModal));
+  document.querySelectorAll('.js-close-devices').forEach(b => (b.onclick = closeDeviceModal));
+  document.querySelectorAll('.js-open-install').forEach(b => (b.onclick = openInstallModal));
+  document.querySelectorAll('.js-close-install').forEach(b => (b.onclick = closeInstallModal));
+
+  const btnPwaInstall = document.getElementById('btn-pwa-install');
+  if (btnPwaInstall) {
+    btnPwaInstall.onclick = triggerPwaInstall;
+  }
+
+  const btnConnectSp = document.getElementById('btn-connect-spotify');
+  if (btnConnectSp) {
+    btnConnectSp.onclick = async () => {
+      const val = document.getElementById('sp-client-id').value.trim();
+      try {
+        await SpotifyClient.startLogin(val);
+      } catch (err) {
+        showToast(err.message);
+      }
+    };
+  }
+
+  const btnSaveId = document.getElementById('btn-save-client-id');
+  if (btnSaveId) {
+    btnSaveId.onclick = () => {
+      const val = document.getElementById('sp-client-id').value.trim();
+      SpotifyClient.setClientId(val);
+      showToast(val ? 'Đã lưu Spotify Client ID' : 'Đã xóa Client ID');
+    };
+  }
+
+  // Mobile drawers
+  document.querySelectorAll('[data-mob-drawer]').forEach(b => {
+    b.onclick = () => toggleMobileDrawer(b.dataset.mobDrawer);
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, textarea')) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      setPlaying(!AppState.playing);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      nextTrack();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      prevTrack();
+    } else if (e.key === 'Escape') {
+      closeSpotifyModal();
+      closeDeviceModal();
+      closeInstallModal();
+      closeMobileDrawers();
+    }
+  });
+
+  // Initial render
+  renderTrackList();
+  renderMetadata();
+  setVisualMode('cluster');
+  setPlaying(false);
+  AudioEngine.startDemoSynth(currentTrack, () => AppState.playing);
+  initSpotifySession();
+  requestAnimationFrame(tickFrame);
+}
+
+window.addEventListener('DOMContentLoaded', initApp);
+
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+  </script>
+</body>
+</html>
