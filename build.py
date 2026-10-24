@@ -341,13 +341,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
+{openmusic_js}
+
 {audio_js}
 
 {visualizer_js}
 
 {spotify_js}
-
-{openmusic_js}
 
 {app_js}
 

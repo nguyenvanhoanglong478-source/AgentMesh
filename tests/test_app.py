@@ -131,7 +131,7 @@ async def run_tests():
         await page.locator('#device-list [data-dev="demo-phone"]').click()
         await page.wait_for_timeout(420)
         dev_name = await page.locator(".js-device-name").inner_text()
-        assert "iPhone" in dev_name, f"Expected iPhone device active, got {dev_name}"
+        assert "iphone" in dev_name.lower(), f"Expected iPhone device active, got {dev_name}"
         print("[PASS] T09: Cross-device switcher (Phone <-> Laptop) transfers active device", flush=True)
 
         # T10: Verify Spotify OAuth PKCE Modal

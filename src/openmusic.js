@@ -30,6 +30,46 @@ const OpenMusicClient = (function () {
     };
   }
 
+  function queryItunes(term, limit = 50) {
+    return new Promise(resolve => {
+      const cbName = 'vang_itunes_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+      let resolved = false;
+      const script = document.createElement('script');
+      const cleanup = () => {
+        try { delete window[cbName]; } catch (e) {}
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          resolve([]);
+        }
+      }, 5000);
+
+      window[cbName] = data => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve((data && data.results) || []);
+        }
+      };
+
+      script.onerror = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve([]);
+        }
+      };
+
+      script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=${limit}&callback=${cbName}`;
+      (document.head || document.body).appendChild(script);
+    });
+  }
+
   async function search(query, limit = 50) {
     const q = String(query || '').trim();
     if (!q) return [];
@@ -39,11 +79,7 @@ const OpenMusicClient = (function () {
     }
 
     try {
-      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=${limit}`;
-      const resp = await fetch(url);
-      if (!resp.ok) return [];
-      const json = await resp.json();
-      const items = (json && json.results) || [];
+      const items = await queryItunes(q, limit);
       const mapped = items.map(mapItunesItem).filter(Boolean);
       CACHE.set(cacheKey, mapped);
       return mapped;
@@ -120,6 +156,7 @@ const OpenMusicClient = (function () {
 
   return {
     search,
+    queryItunes,
     mapItunesItem,
     CURATED_COLLECTIONS,
     fetchCuratedTracks,

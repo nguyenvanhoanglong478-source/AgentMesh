@@ -361,11 +361,18 @@ const AudioEngine = (function () {
     // - Feeds 100% real vocal/drum/bass FFT into analyser (for the 3D visualizer)
     // - Speaker output is STRICTLY MUTED (gain = 0.0) so it NEVER clashes with Spotify's own audio!
     try {
-      const q = encodeURIComponent(`${track.t} ${track.a}`.trim());
-      const resp = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
-      if (!resp.ok) return;
-      const json = await resp.json();
-      const item = json && json.results && json.results[0];
+      const q = `${track.t} ${track.a}`.trim();
+      let item = null;
+      if (window.OpenMusicClient && window.OpenMusicClient.queryItunes) {
+        const results = await window.OpenMusicClient.queryItunes(q, 1);
+        item = results && results[0];
+      } else {
+        const resp = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`).catch(() => null);
+        if (resp && resp.ok) {
+          const json = await resp.json().catch(() => null);
+          item = json && json.results && json.results[0];
+        }
+      }
       if (!item || !item.previewUrl || currentRefTrackId !== trackKey) return;
 
       ensureContext();
