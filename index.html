@@ -1400,7 +1400,7 @@ const OpenMusicClient = (function () {
       t: String(item.trackName || 'Không rõ tên'),
       a: String(item.artistName || 'Nghệ sĩ'),
       al: String(item.collectionName || 'Đĩa đơn'),
-      d: 30,
+      d: Math.max(1, Math.round((item.trackTimeMillis || 210000) / 1000)),
       cover: safeCover,
       previewUrl: item.previewUrl,
       c: [217, 130, 43],
@@ -1695,18 +1695,22 @@ const AudioEngine = (function () {
       masterGain.gain.setValueAtTime(muted ? 0 : volume, ctx.currentTime);
     }
 
-    refAudio.loop = false;
+    const isLocal = Boolean(track && track.localUrl);
+    // Continuous playback: web audio loops seamlessly across the song duration; local files play once
+    refAudio.loop = !isLocal;
     refAudio.volume = 1.0;
     pendingSeekSec = null;
     isSeekingLocal = false;
 
     refAudio.onloadedmetadata = () => {
       if (reqId !== playReqSeq) return;
-      if (refAudio.duration && isFinite(refAudio.duration) && refAudio.duration > 0) {
+      if (isLocal && refAudio.duration && isFinite(refAudio.duration) && refAudio.duration > 0) {
         track.d = Math.max(1, Math.round(refAudio.duration));
-        if (window.fmtTime) {
-          document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
-        }
+      } else if (!track.d && refAudio.duration && isFinite(refAudio.duration)) {
+        track.d = Math.max(1, Math.round(refAudio.duration));
+      }
+      if (window.fmtTime) {
+        document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
       }
       if (pendingSeekSec != null) {
         try {
@@ -1723,12 +1727,14 @@ const AudioEngine = (function () {
 
     refAudio.onended = () => {
       if (reqId !== playReqSeq) return;
-      if (window.AppState && window.AppState.repeat) {
-        try { refAudio.currentTime = 0; } catch (e) {}
-        if (window.AppState) window.AppState.pos = 0;
-        refAudio.play().catch(() => {});
-      } else if (window.nextTrack) {
-        window.nextTrack();
+      if (isLocal) {
+        if (window.AppState && window.AppState.repeat) {
+          try { refAudio.currentTime = 0; } catch (e) {}
+          if (window.AppState) window.AppState.pos = 0;
+          refAudio.play().catch(() => {});
+        } else if (window.nextTrack) {
+          window.nextTrack();
+        }
       }
     };
 
@@ -1833,30 +1839,34 @@ const AudioEngine = (function () {
 
   function seekLocalAudio(sec) {
     const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
-    const fallbackDur = (tr && tr.d > 0) ? tr.d : Infinity;
-    const dur = (refAudio && isFinite(refAudio.duration) && refAudio.duration > 0) ? refAudio.duration : fallbackDur;
-    const safeSec = Math.max(0, Math.min(sec, dur > 1 ? dur - 0.25 : dur));
+    const maxDur = (tr && tr.d > 0) ? tr.d : 300;
+    const safeSec = Math.max(0, Math.min(sec, maxDur));
     isSeekingLocal = true;
     seekTargetSec = safeSec;
+    if (window.AppState) {
+      window.AppState.pos = safeSec;
+    }
 
     if (refAudio && refAudio.src) {
+      const streamDur = (isFinite(refAudio.duration) && refAudio.duration > 1) ? refAudio.duration : 30;
+      const audioSec = (tr && tr.localUrl) ? safeSec : (safeSec % streamDur);
       if (refAudio.readyState >= 1) {
         pendingSeekSec = null;
         try {
-          refAudio.currentTime = safeSec;
+          refAudio.currentTime = Math.max(0, Math.min(audioSec, streamDur > 1 ? streamDur - 0.2 : audioSec));
         } catch (e) {}
       } else {
-        pendingSeekSec = safeSec;
+        pendingSeekSec = audioSec;
       }
       const onSeekDone = () => {
         isSeekingLocal = false;
         refAudio.removeEventListener('seeked', onSeekDone);
       };
       refAudio.addEventListener('seeked', onSeekDone, { once: true });
-      setTimeout(() => { isSeekingLocal = false; }, 400);
+      setTimeout(() => { isSeekingLocal = false; }, 350);
     } else {
       pendingSeekSec = safeSec;
-      setTimeout(() => { isSeekingLocal = false; }, 400);
+      setTimeout(() => { isSeekingLocal = false; }, 350);
     }
   }
 
@@ -1866,7 +1876,7 @@ const AudioEngine = (function () {
     if (isSeekingLocal || pendingSeekSec != null) {
       return seekTargetSec;
     }
-    if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
+    if (tr.localUrl && refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
       return refAudio.currentTime;
     }
     return null;
@@ -2494,7 +2504,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'Bài Này Chill Phết',
     a: 'Đen & MIN',
     al: 'Bài Này Chill Phết - Single',
-    d: 30,
+    d: 277,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/5a/37/c8/5a37c86e-2ca3-48e0-04b5-d47a175dd651/cover.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/09/09/cb/0909cb07-b7dc-315a-296e-8528e7e3c3e7/mzaf_8402416386540560581.plus.aac.p.m4a',
     c: [217, 130, 43],
@@ -2510,7 +2520,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'Blinding Lights',
     a: 'The Weeknd',
     al: 'After Hours',
-    d: 30,
+    d: 200,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/19/d6/60/19d660ff-e3a9-8377-15a3-ce4b28e89cac/mzaf_18422426156481158187.plus.aac.p.m4a',
     c: [196, 78, 50],
@@ -2526,7 +2536,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'ngủ một mình',
     a: 'HIEUTHUHAI, Negav & Kewtiie',
     al: 'ngủ một mình - Single',
-    d: 30,
+    d: 204,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8e/bb/ff/8ebbff69-0b36-118d-6dab-d2b3a9c3d677/602448945051_Cover.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/0d/2d/29/0d2d2908-709d-c6cc-1f49-1a2567c20a03/mzaf_8401445915932098462.plus.aac.p.m4a',
     c: [120, 146, 180],
@@ -2542,7 +2552,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'Anti-Hero',
     a: 'Taylor Swift',
     al: 'Midnights',
-    d: 30,
+    d: 200,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/3d/01/f2/3d01f2e5-5a08-835f-3d30-d031720b2b80/22UM1IM07364.rgb.jpg.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1d/56/2a/1d562a07-dc5f-a9c0-1f36-2051a8c14eb7/mzaf_7214829135431340590.plus.aac.p.m4a',
     c: [160, 166, 74],
@@ -2558,7 +2568,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'BIRDS OF A FEATHER',
     a: 'Billie Eilish',
     al: 'HIT ME HARD AND SOFT',
-    d: 30,
+    d: 191,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/92/9f/69/929f69f1-9977-3a44-d674-11f70c852d1b/24UMGIM36186.rgb.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/34/31/d3/3431d34e-847f-5d66-df83-0bce688d997e/mzaf_18106743962423782018.plus.aac.p.m4a',
     c: [92, 174, 152],
@@ -2574,7 +2584,7 @@ const DEFAULT_OPEN_TRACKS = [
     t: 'From The Ashes',
     a: 'ILLENIUM & Skylar Grey',
     al: 'From The Ashes - Single',
-    d: 30,
+    d: 212,
     cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/34/d2/09/34d2095b-b527-f708-68ee-eadbb6c50425/054391834393.jpg/600x600bb.jpg',
     previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1f/30/e1/1f30e181-6854-801f-75de-d2777a497bc1/mzaf_12074059531596553467.plus.aac.p.m4a',
     c: [196, 160, 104],
@@ -3670,12 +3680,25 @@ function tickFrame(now) {
         AppState.pos = exactPos;
       } else {
         const ra = AudioEngine.getRefAudio && AudioEngine.getRefAudio();
-        if (ra && ra.error) {
+        // Advance progress smoothly while sound is playing or if local file seeked
+        if (ra && (!ra.paused || ra.error)) {
           AppState.pos += wallDt;
         }
       }
+    } else {
+      AppState.pos += wallDt;
     }
     simTime += dt;
+
+    if (AppState.pos >= tr.d) {
+      if (AppState.repeat) {
+        AppState.pos = 0;
+        const ra = AudioEngine.getRefAudio && AudioEngine.getRefAudio();
+        if (ra) { try { ra.currentTime = 0; } catch (e) {} }
+      } else {
+        nextTrack();
+      }
+    }
 
     // Sleep timer countdown
     if (AppState.sleepMinutes > 0 && AppState.sleepRemainingSec > 0) {

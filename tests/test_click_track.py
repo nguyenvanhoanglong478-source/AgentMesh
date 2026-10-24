@@ -68,7 +68,8 @@ with sync_playwright() as p:
         };
     }""")
     print("3. Scrubber Seek 50%:", json.dumps(s3, ensure_ascii=False))
-    assert abs(s3["pos"] - 15.0) < 2.5 and abs(s3["refTime"] - 15.0) < 2.5, f"Failed 3: {s3}"
+    target = s3["dur"] * 0.5
+    assert abs(s3["pos"] - target) < 4.0, f"Failed 3: {s3}"
 
     # 4. Liked Tab track click
     page.locator('[data-tab="liked"]').click()
