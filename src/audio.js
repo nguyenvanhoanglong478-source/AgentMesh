@@ -292,6 +292,9 @@ const AudioEngine = (function () {
         try { refAudio.currentTime = 0; } catch (e) {}
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
+          if (window.fmtTime) {
+            document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
+          }
         }
       };
       refAudio.oncanplay = () => {
@@ -348,6 +351,9 @@ const AudioEngine = (function () {
         try { refAudio.currentTime = 0; } catch (e) {}
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
+          if (window.fmtTime) {
+            document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
+          }
         }
       };
       refAudio.oncanplay = () => {
@@ -475,9 +481,24 @@ const AudioEngine = (function () {
     }
   }
 
+  let isSeekingLocal = false;
+  let seekTargetSec = 0;
+
   function seekLocalAudio(sec) {
     if (refAudio && refAudio.src) {
-      try { refAudio.currentTime = Math.max(0, sec); } catch (e) {}
+      const dur = isFinite(refAudio.duration) && refAudio.duration > 0 ? refAudio.duration : Infinity;
+      const safeSec = Math.max(0, Math.min(sec, dur > 1 ? dur - 0.25 : dur));
+      isSeekingLocal = true;
+      seekTargetSec = safeSec;
+      try {
+        refAudio.currentTime = safeSec;
+      } catch (e) {}
+      const onSeekDone = () => {
+        isSeekingLocal = false;
+        refAudio.removeEventListener('seeked', onSeekDone);
+      };
+      refAudio.addEventListener('seeked', onSeekDone, { once: true });
+      setTimeout(() => { isSeekingLocal = false; }, 350);
     }
   }
 
@@ -491,6 +512,9 @@ const AudioEngine = (function () {
     );
     if (!isDirectAudioTrack) {
       return null;
+    }
+    if (isSeekingLocal) {
+      return seekTargetSec;
     }
     if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
       return refAudio.currentTime;
@@ -762,3 +786,4 @@ const AudioEngine = (function () {
     bands
   };
 })();
+window.AudioEngine = AudioEngine;

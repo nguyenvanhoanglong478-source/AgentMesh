@@ -246,10 +246,10 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       </div>
 
       <div class="transport-center">
-        <span class="mono dim js-time">0:37</span>
+        <span class="mono dim js-time">0:00</span>
         <div class="scrub-track js-scrub" role="slider" aria-label="Tiến độ bài hát">
-          <div class="scrub-fill js-scrub-fill" style="width:14.6%"></div>
-          <div class="scrub-head js-scrub-head" style="left:14.6%"></div>
+          <div class="scrub-fill js-scrub-fill" style="width:0%"></div>
+          <div class="scrub-head js-scrub-head" style="left:0%"></div>
         </div>
         <span class="mono dim js-dur">4:12</span>
       </div>

@@ -200,7 +200,7 @@ const AppState = {
   playlists: DEMO_PLAYLISTS.slice(),
   openedCollection: null, // Stores currently opened Playlist or Album object
   idx: 0,
-  pos: 37,
+  pos: 0,
   playing: false,
   shuffle: false,
   repeat: false,
@@ -228,6 +228,7 @@ let simTime = 0;
 let visualTime = 0;
 let lastFrame = performance.now();
 let lastRenderedSec = -1;
+let isDraggingScrubber = false;
 let toastTmr = null;
 let wakeLockSentinel = null;
 
@@ -235,6 +236,7 @@ function fmtTime(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
   return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
 }
+window.fmtTime = fmtTime;
 
 function showToast(msg) {
   const el = document.getElementById('toast');
@@ -1384,15 +1386,17 @@ function tickFrame(now) {
   const progRatio = tr.d > 0 ? AppState.pos / tr.d : 0;
   Visualizer3D.renderFrame(dt, visualTime, bands, currentAcc, progRatio, AppState.playing);
 
-  // Update Scrubber UI
-  const pct = Math.max(0, Math.min(100, progRatio * 100));
-  document.querySelectorAll('.js-scrub-fill').forEach(el => (el.style.width = pct + '%'));
-  document.querySelectorAll('.js-scrub-head').forEach(el => (el.style.left = pct + '%'));
+  // Update Scrubber UI (only when user is not actively dragging the scrubber)
+  if (!isDraggingScrubber) {
+    const pct = Math.max(0, Math.min(100, progRatio * 100));
+    document.querySelectorAll('.js-scrub-fill').forEach(el => (el.style.width = pct + '%'));
+    document.querySelectorAll('.js-scrub-head').forEach(el => (el.style.left = pct + '%'));
 
-  const sec = Math.floor(AppState.pos);
-  if (sec !== lastRenderedSec) {
-    lastRenderedSec = sec;
-    document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(AppState.pos)));
+    const sec = Math.floor(AppState.pos);
+    if (sec !== lastRenderedSec) {
+      lastRenderedSec = sec;
+      document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(AppState.pos)));
+    }
   }
 
   // Update Signal Meters
@@ -1441,29 +1445,100 @@ function initApp() {
     };
   });
 
-  // Scrubber seek
+  // Full Pointer Drag & Tap Support for Scrubber Seek
+  function updateScrubberVisual(ratio) {
+    const tr = currentTrack();
+    const dur = (tr && tr.d) || 1;
+    const targetPos = Math.max(0, Math.min(dur, ratio * dur));
+    const pct = Math.max(0, Math.min(100, ratio * 100));
+    document.querySelectorAll('.js-scrub-fill').forEach(el => (el.style.width = pct + '%'));
+    document.querySelectorAll('.js-scrub-head').forEach(el => (el.style.left = pct + '%'));
+    document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(targetPos)));
+    return targetPos;
+  }
+
+  function commitSeekPosition(targetPos) {
+    AppState.pos = targetPos;
+    if (AppState.spotifyActive) {
+      SpotifyClient.seekPosition(targetPos).catch(() => {});
+    }
+    if (AudioEngine.seekLocalAudio) {
+      AudioEngine.seekLocalAudio(targetPos);
+    }
+    updateMediaSession();
+  }
+
   document.querySelectorAll('.js-scrub').forEach(track => {
-    track.onclick = e => {
+    const getRatio = e => {
       const rect = track.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const tr = currentTrack();
-      AppState.pos = ratio * tr.d;
-      if (AppState.spotifyActive) SpotifyClient.seekPosition(AppState.pos).catch(() => {});
-      if (AudioEngine.seekLocalAudio) AudioEngine.seekLocalAudio(AppState.pos);
-      renderMetadata();
+      if (!rect.width) return 0;
+      return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     };
+
+    track.addEventListener('pointerdown', e => {
+      isDraggingScrubber = true;
+      try { track.setPointerCapture(e.pointerId); } catch (err) {}
+      const ratio = getRatio(e);
+      const targetPos = updateScrubberVisual(ratio);
+      commitSeekPosition(targetPos);
+    });
+
+    track.addEventListener('pointermove', e => {
+      if (!isDraggingScrubber) return;
+      const ratio = getRatio(e);
+      updateScrubberVisual(ratio);
+    });
+
+    const finishDrag = e => {
+      if (!isDraggingScrubber) return;
+      isDraggingScrubber = false;
+      try { track.releasePointerCapture(e.pointerId); } catch (err) {}
+      const ratio = getRatio(e);
+      const targetPos = updateScrubberVisual(ratio);
+      commitSeekPosition(targetPos);
+    };
+
+    track.addEventListener('pointerup', finishDrag);
+    track.addEventListener('pointercancel', finishDrag);
   });
 
-  // Volume seek & mute
+  // Volume seek & drag support
+  let isDraggingVolume = false;
+
+  function commitVolume(ratio) {
+    const v = AudioEngine.setVolume(ratio);
+    document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = Math.round(v * 100) + '%'));
+    document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = Math.round(v * 100)));
+    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(v * 100).catch(() => {});
+  }
+
   document.querySelectorAll('.js-vol-track').forEach(vt => {
-    vt.onclick = e => {
+    const getRatio = e => {
       const rect = vt.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const v = AudioEngine.setVolume(ratio);
-      document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = Math.round(v * 100) + '%'));
-      document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = Math.round(v * 100)));
-      if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(v * 100).catch(() => {});
+      if (!rect.width) return 0;
+      return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     };
+
+    vt.addEventListener('pointerdown', e => {
+      isDraggingVolume = true;
+      try { vt.setPointerCapture(e.pointerId); } catch (err) {}
+      commitVolume(getRatio(e));
+    });
+
+    vt.addEventListener('pointermove', e => {
+      if (!isDraggingVolume) return;
+      commitVolume(getRatio(e));
+    });
+
+    const finishVol = e => {
+      if (!isDraggingVolume) return;
+      isDraggingVolume = false;
+      try { vt.releasePointerCapture(e.pointerId); } catch (err) {}
+      commitVolume(getRatio(e));
+    };
+
+    vt.addEventListener('pointerup', finishVol);
+    vt.addEventListener('pointercancel', finishVol);
   });
 
   document.querySelectorAll('.js-mute').forEach(b => {

@@ -612,56 +612,68 @@ html, body {
 }
 
 /* Scrubber & Volume Track */
+/* Scrubber & Volume Track — 100% Geometric Square Scrubber */
 .scrub-track {
   flex: 1;
-  height: 3px;
+  height: 4px;
   background: var(--line);
   position: relative;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .scrub-track::before {
   content: "";
   position: absolute;
-  inset: -12px 0;
+  inset: -14px 0;
 }
 
 .scrub-fill {
   position: absolute;
   left: 0;
   top: 0;
-  height: 3px;
+  height: 100%;
   background: var(--paper);
-  border-radius: 2px;
+  border-radius: 0;
   pointer-events: none;
 }
 
 .scrub-head {
   position: absolute;
-  top: -3px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
   background: var(--acc);
-  margin-left: -4.5px;
   pointer-events: none;
   box-shadow: 0 0 8px var(--acc);
+  transition: transform 0.1s ease;
+}
+
+.scrub-track:hover .scrub-head {
+  transform: translate(-50%, -50%) scale(1.2);
 }
 
 .vol-track {
   width: 76px;
-  height: 3px;
+  height: 4px;
   background: var(--line);
   position: relative;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .vol-track::before {
   content: "";
   position: absolute;
-  inset: -10px 0;
+  inset: -14px 0;
 }
 
 /* Modals */
