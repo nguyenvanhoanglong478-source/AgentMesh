@@ -651,9 +651,6 @@ function setPlaying(playState, skipRemoteCall = false) {
 
   if (AppState.playing) {
     AudioEngine.ensureContext();
-    if (AudioEngine.syncTrackAudioProfile && tr) {
-      AudioEngine.syncTrackAudioProfile(tr, true);
-    }
   }
 
   if (AppState.spotifyActive && !isLocal && !skipRemoteCall) {

@@ -66,8 +66,9 @@ const AudioEngine = (function () {
       masterGain.connect(analyser);
       masterGain.connect(ctx.destination);
 
+      // Audible gain for local audio files (.mp3) ONLY; kept at 0.0 for Spotify tracks to prevent double audio
       refAudibleGain = ctx.createGain();
-      refAudibleGain.gain.value = 1.0;
+      refAudibleGain.gain.value = 0.0;
       refAudibleGain.connect(masterGain);
 
       // Zero-gain sink connected to destination so browser always pulls FFT frames through analyser
@@ -217,8 +218,9 @@ const AudioEngine = (function () {
       const bpm = (tr && tr.bpm) || 112;
       const ms = (60 / bpm / 4) * 1000; // 16th-note clock
       const isLocalFile = !!(tr && tr.localUrl);
-      const refIsPlaying = !!(refAudio && refAudio.src && !refAudio.paused && refAudio.readyState >= 2);
-      if (isPlayingFn() && !isLocalFile && !spotifyDeviceAudible && !refIsPlaying) {
+      const isSpotify = !!(window.AppState && window.AppState.spotifyActive);
+      // DemoSynth ONLY plays in Demo Mode (when Spotify is NOT active and not a local file)
+      if (isPlayingFn() && !isLocalFile && !isSpotify) {
         ensureContext();
         triggerDemoStep(tr, stepIdx++);
       }
@@ -235,8 +237,8 @@ const AudioEngine = (function () {
   }
 
   // Load real audio reference stream (via public CORS-enabled iTunes API) & Spotify analysis for a track
-  // When Spotify is playing on a remote device or encrypted EME stream, this feeds the real track's
-  // audio waveform into a muted WebAudio node (or plays it directly if no active Spotify device is found)
+  // Feeds real 32-band FFT into analyser (for 3D visualizer) while keeping speakers MUTED (0.0 volume)
+  // so Spotify streams cleanly without any duplicate/overlapping audio!
   async function syncTrackAudioProfile(track, isPlaying) {
     if (!track || !track.t) return;
     const trackKey = track.id || `${track.t}__${track.a}`;
@@ -289,6 +291,7 @@ const AudioEngine = (function () {
 
     // Built-in Demo tracks use the procedural multi-section DemoSynth directly
     if (String(track.id || '').startsWith('demo-')) {
+      if (refAudibleGain) refAudibleGain.gain.value = 0.0;
       return;
     }
 
@@ -305,8 +308,8 @@ const AudioEngine = (function () {
     }
 
     // 2. Fetch real audio stream from public CORS-enabled iTunes Search API
-    // - Feeds 100% real vocal/drum/bass FFT into analyser
-    // - Also outputs audible music automatically if Spotify device playback isn't active/available!
+    // - Feeds 100% real vocal/drum/bass FFT into analyser (for the 3D visualizer)
+    // - Speaker output is STRICTLY MUTED (gain = 0.0) so it NEVER clashes with Spotify's own audio!
     try {
       const q = encodeURIComponent(`${track.t} ${track.a}`.trim());
       const resp = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
@@ -329,8 +332,9 @@ const AudioEngine = (function () {
           refMediaSource.connect(refAudibleGain);
         } catch (e) {}
       }
+      // CRITICAL: Mute speaker gain to 0.0 for all Spotify tracks so the user ONLY hears Spotify!
       if (refAudibleGain) {
-        refAudibleGain.gain.value = spotifyDeviceAudible ? 0.0 : 1.0;
+        refAudibleGain.gain.value = 0.0;
       }
       refAudio.volume = 1.0;
       if (shouldPlayNow()) {
@@ -344,7 +348,8 @@ const AudioEngine = (function () {
     if (refAudibleGain && ctx) {
       const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
       const isLocal = !!(tr && tr.localUrl);
-      refAudibleGain.gain.setValueAtTime((spotifyDeviceAudible && !isLocal) ? 0.0 : 1.0, ctx.currentTime);
+      // Only local files output through refAudibleGain; Spotify tracks are always streamed by Spotify directly
+      refAudibleGain.gain.setValueAtTime(isLocal ? 1.0 : 0.0, ctx.currentTime);
     }
   }
 
