@@ -9,6 +9,7 @@ css = (SRC / "style.css").read_text(encoding="utf-8")
 audio_js = (SRC / "audio.js").read_text(encoding="utf-8")
 visualizer_js = (SRC / "visualizer.js").read_text(encoding="utf-8")
 spotify_js = (SRC / "spotify.js").read_text(encoding="utf-8")
+openmusic_js = (SRC / "openmusic.js").read_text(encoding="utf-8")
 app_js = (SRC / "app.js").read_text(encoding="utf-8")
 
 HTML_TEMPLATE = f"""<!DOCTYPE html>
@@ -79,9 +80,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
           id="search-input"
           class="search-input"
           type="search"
-          placeholder="Tìm bài hát, nghệ sĩ, album..."
+          placeholder="Tìm bài hát, nghệ sĩ, album trên toàn cầu..."
           autocomplete="off"
         />
+        <div class="search-source-bar">
+          <button id="src-pill-open" class="word mono on" type="button" title="Tìm trong 100M+ bài hát Web Mở miễn phí">🌐 Web Mở</button>
+          <button id="src-pill-spotify" class="word mono" type="button" title="Tìm trong danh mục bài hát Spotify">🟢 Spotify</button>
+        </div>
       </div>
 
       <div id="track-list" class="track-list" role="list"></div>
@@ -341,6 +346,8 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 {visualizer_js}
 
 {spotify_js}
+
+{openmusic_js}
 
 {app_js}
 

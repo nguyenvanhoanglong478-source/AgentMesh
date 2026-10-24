@@ -331,12 +331,12 @@ const SpotifyClient = (function () {
     return api('/me');
   }
 
-  async function fetchLikedTracks(maxItems = 500, onProgress = null) {
+  async function fetchLikedTracks(maxItems = 10000, onProgress = null) {
     const all = [];
     let offset = 0;
     const limit = 50;
     while (offset < maxItems) {
-      const data = await api(`/me/tracks?market=from_token&limit=${limit}&offset=${offset}`);
+      const data = await api(`/me/tracks?market=from_token&limit=${limit}&offset=${offset}`).catch(() => null);
       const items = (data && data.items) || [];
       if (!items.length) break;
       const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
@@ -346,6 +346,46 @@ const SpotifyClient = (function () {
       offset += limit;
     }
     return dedupeTracks(all);
+  }
+
+  async function fetchNewReleases(limit = 50) {
+    const data = await api(`/browse/new-releases?limit=${limit}`).catch(() =>
+      api(`/browse/new-releases?country=VN&limit=${limit}`).catch(() => null)
+    );
+    const items = (data && data.albums && data.albums.items) || [];
+    return items.map(alb => {
+      if (!alb || !alb.id) return null;
+      const rawCover = (alb.images && alb.images[0] && alb.images[0].url) || '';
+      return {
+        id: alb.id,
+        uri: alb.uri || `spotify:album:${alb.id}`,
+        kind: 'album',
+        source: 'spotify',
+        name: alb.name || 'Album mới',
+        artist: (alb.artists || []).map(a => a && a.name).filter(Boolean).join(', ') || 'Nghệ sĩ',
+        count: alb.total_tracks || 0,
+        cover: rawCover.startsWith('https://') ? rawCover : ''
+      };
+    }).filter(Boolean);
+  }
+
+  async function fetchFeaturedPlaylists(limit = 50) {
+    const data = await api(`/browse/featured-playlists?limit=${limit}`).catch(() => null);
+    const items = (data && data.playlists && data.playlists.items) || [];
+    return items.map(p => {
+      if (!p || !p.id) return null;
+      const rawCover = (p.images && p.images[0] && p.images[0].url) || '';
+      return {
+        id: p.id,
+        uri: p.uri || `spotify:playlist:${p.id}`,
+        kind: 'playlist',
+        source: 'spotify',
+        name: p.name || 'Tuyển tập nổi bật',
+        artist: (p.owner && p.owner.display_name) || 'Spotify',
+        count: (p.tracks && p.tracks.total) || (p.items && p.items.total) || 0,
+        cover: rawCover.startsWith('https://') ? rawCover : ''
+      };
+    }).filter(Boolean);
   }
 
   async function fetchTopTracks() {
@@ -791,6 +831,8 @@ const SpotifyClient = (function () {
     fetchProfile,
     fetchLikedTracks,
     fetchTopTracks,
+    fetchNewReleases,
+    fetchFeaturedPlaylists,
     fetchSavedAlbums,
     fetchSavedAlbumTracks,
     fetchRecentTracks,

@@ -284,18 +284,68 @@ const AudioEngine = (function () {
           track.d = Math.max(1, Math.round(refAudio.duration));
         }
       };
+      refAudio.onended = () => {
+        if (window.AppState && window.AppState.repeat) {
+          refAudio.currentTime = 0;
+          refAudio.play().catch(() => {});
+        } else if (window.nextTrack) {
+          window.nextTrack();
+        }
+      };
       refAudio.volume = 1.0;
       if (shouldPlayNow()) refAudio.play().catch(() => {});
       return;
     }
 
-    // Built-in Demo tracks use the procedural multi-section DemoSynth directly
+    // 1. If track is from Open Web catalog (already has previewUrl or is marked open source)
+    const isDirectOpenTrack = Boolean(
+      track.source === 'open' ||
+      track.isOpenSource ||
+      (track.id && String(track.id).startsWith('open-')) ||
+      (!track.uri && track.previewUrl)
+    );
+
+    if (isDirectOpenTrack && track.previewUrl) {
+      ensureContext();
+      if (!refAudio) {
+        refAudio = new Audio();
+        refAudio.crossOrigin = 'anonymous';
+      }
+      refAudio.loop = false;
+      refAudio.src = track.previewUrl;
+      if (!refMediaSource && ctx) {
+        try {
+          refMediaSource = ctx.createMediaElementSource(refAudio);
+          refMediaSource.connect(analyser);
+          refMediaSource.connect(refAudibleGain);
+        } catch (e) {}
+      }
+      if (refAudibleGain) refAudibleGain.gain.value = 1.0;
+      refAudio.onloadedmetadata = () => {
+        if (refAudio.duration && isFinite(refAudio.duration)) {
+          track.d = Math.max(1, Math.round(refAudio.duration));
+        }
+      };
+      refAudio.onended = () => {
+        if (window.AppState && window.AppState.repeat) {
+          refAudio.currentTime = 0;
+          refAudio.play().catch(() => {});
+        } else if (window.nextTrack) {
+          window.nextTrack();
+        }
+      };
+      refAudio.volume = 1.0;
+      if (shouldPlayNow()) refAudio.play().catch(() => {});
+      return;
+    }
+
+    // 2. Built-in Demo tracks use the procedural multi-section DemoSynth directly
     if (String(track.id || '').startsWith('demo-')) {
       if (refAudibleGain) refAudibleGain.gain.value = 0.0;
       return;
     }
 
-    // 1. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
+    // 3. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
     if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id) {
       window.SpotifyClient.fetchAudioAnalysis(track.id).then(data => {
         if (data && currentRefTrackId === trackKey) {
@@ -307,7 +357,7 @@ const AudioEngine = (function () {
       }).catch(() => {});
     }
 
-    // 2. Fetch real audio stream from public CORS-enabled iTunes Search API
+    // 4. Fetch silent reference audio stream for Spotify tracks via public iTunes Search API
     // - Feeds 100% real vocal/drum/bass FFT into analyser (for the 3D visualizer)
     // - Speaker output is STRICTLY MUTED (gain = 0.0) so it NEVER clashes with Spotify's own audio!
     try {
@@ -343,13 +393,22 @@ const AudioEngine = (function () {
     } catch (e) {}
   }
 
+  function isTrackAudibleViaRefAudio(tr) {
+    if (!tr) return false;
+    if (tr.localUrl) return true;
+    if (tr.source === 'open' || tr.isOpenSource || (tr.id && String(tr.id).startsWith('open-'))) return true;
+    if (!window.AppState || !window.AppState.spotifyActive || !tr.uri || !tr.uri.startsWith('spotify:')) {
+      return Boolean(tr.previewUrl);
+    }
+    return false;
+  }
+
   function setSpotifyDeviceAudible(isAudible) {
     spotifyDeviceAudible = !!isAudible;
     if (refAudibleGain && ctx) {
       const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
-      const isLocal = !!(tr && tr.localUrl);
-      // Only local files output through refAudibleGain; Spotify tracks are always streamed by Spotify directly
-      refAudibleGain.gain.setValueAtTime(isLocal ? 1.0 : 0.0, ctx.currentTime);
+      const shouldBeAudible = isTrackAudibleViaRefAudio(tr);
+      refAudibleGain.gain.setValueAtTime(shouldBeAudible ? 1.0 : 0.0, ctx.currentTime);
     }
   }
 
@@ -366,6 +425,13 @@ const AudioEngine = (function () {
     if (refAudio && refAudio.src) {
       try { refAudio.currentTime = Math.max(0, sec); } catch (e) {}
     }
+  }
+
+  function getPlaybackPosition() {
+    if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime > 0) {
+      return refAudio.currentTime;
+    }
+    return null;
   }
 
   function stopCaptureStream() {
@@ -620,6 +686,7 @@ const AudioEngine = (function () {
     setReferencePlaying,
     setSpotifyDeviceAudible,
     seekLocalAudio,
+    getPlaybackPosition,
     setSourceMode,
     toggleMicInput,
     setVolume,

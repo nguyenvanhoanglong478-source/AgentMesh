@@ -73,8 +73,8 @@ async def run_tests():
             await page.screenshot(path=str(ARTIFACT_DIR / "vang_desktop_cluster.png"))
 
         # T05: Verify Visualizer Mode Switching ("Khối đốm hạt" -> "Địa hình" -> "Xoáy hạt")
-        vmode_labels = await page.locator(".js-vmode").all_inner_texts()
-        assert "Khối đốm hạt" in vmode_labels[0], f"Expected 'Khối đốm hạt', got {vmode_labels}"
+        vmode_cluster_title = await page.locator('.js-vmode[data-m="cluster"]').get_attribute("title")
+        assert "Khối đốm hạt" in vmode_cluster_title, f"Expected 'Khối đốm hạt', got {vmode_cluster_title}"
         await page.locator('.js-vmode[data-m="ridge"]').click()
         await page.wait_for_timeout(200)
         assert "on" in (await page.locator('.js-vmode[data-m="ridge"]').get_attribute("class"))
@@ -99,18 +99,22 @@ async def run_tests():
 
         await page.locator('[data-tab="playlists"]').click()
         pl_count = await page.locator("#track-list .qrow[data-pl]").count()
-        assert pl_count == 2, f"Expected 2 playlists, got {pl_count}"
+        assert pl_count >= 4, f"Expected at least 4 playlists/collections, got {pl_count}"
         await page.locator('#track-list .qrow[data-pl="pl-1"]').click()
         await page.wait_for_timeout(320)
         assert (await page.locator("#track-list .qrow").count()) == 4
 
         await page.locator('[data-tab="search"]').click()
+        # Verify Search source pills (Web Mở & Spotify)
+        assert await page.locator("#src-pill-open").is_visible(), "Web Mở source pill should be visible"
+        assert await page.locator("#src-pill-spotify").is_visible(), "Spotify source pill should be visible"
+
         await page.fill("#search-input", "Mưa Phố")
-        await page.wait_for_timeout(150)
-        assert (await page.locator("#track-list .qrow").count()) == 1
+        await page.wait_for_timeout(350)
+        assert (await page.locator("#track-list .qrow").count()) >= 1
         await page.fill("#search-input", "")
         await page.locator('[data-tab="queue"]').click()
-        print("[PASS] T07: Library tabs (Liked, Playlists, Recent, Search) filter and load tracks", flush=True)
+        print("[PASS] T07: Library tabs & Multi-Source Search (Liked, Playlists, Recent, Search) filter and load tracks", flush=True)
 
         # T08: Verify Scrubber, Shuffle, Repeat, Volume & Mute
         await page.locator(".js-shuffle").click()
