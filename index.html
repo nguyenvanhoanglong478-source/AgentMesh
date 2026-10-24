@@ -1124,7 +1124,7 @@ html, body {
 
       <div class="top-right">
         <button class="word mono js-toggle-theme" type="button" title="Chuyển chế độ Sáng / Tối" aria-label="Đổi giao diện">
-          <span class="js-theme-icon">☀️</span> <span class="js-theme-label">Sáng</span>
+          <span class="js-theme-label">Sáng</span>
         </button>
         <button id="btn-top-new-playlist" class="word mono on js-btn-new-playlist" type="button" title="Tạo danh sách phát mới">+ Tạo Playlist</button>
       </div>
@@ -1244,8 +1244,8 @@ html, body {
           <span class="mono acc js-theme-status" style="font-size:10.5px">Chế độ Tối</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <button class="word mono js-set-theme-dark on" type="button" data-t="dark">🌙 Tối</button>
-          <button class="word mono js-set-theme-light" type="button" data-t="light">☀️ Sáng</button>
+          <button class="word mono js-set-theme-dark on" type="button" data-t="dark">Tối</button>
+          <button class="word mono js-set-theme-light" type="button" data-t="light">Sáng</button>
         </div>
       </div>
 
@@ -1416,7 +1416,12 @@ const OpenMusicClient = (function () {
       let resolved = false;
       const script = document.createElement('script');
       const cleanup = () => {
-        try { delete window[cbName]; } catch (e) {}
+        window[cbName] = () => {
+          try { delete window[cbName]; } catch (e) {}
+        };
+        setTimeout(() => {
+          try { delete window[cbName]; } catch (e) {}
+        }, 30000);
         if (script.parentNode) script.parentNode.removeChild(script);
       };
       const timer = setTimeout(() => {
@@ -1425,7 +1430,7 @@ const OpenMusicClient = (function () {
           cleanup();
           resolve([]);
         }
-      }, 5000);
+      }, 8500);
 
       window[cbName] = data => {
         if (!resolved) {
@@ -4253,7 +4258,6 @@ function tickFrame(now) {
     try { localStorage.setItem("openmusic_theme", t); } catch (e) {}
 
     const isLight = (t === "light");
-    document.querySelectorAll(".js-theme-icon").forEach(el => (el.textContent = isLight ? "🌙" : "☀️"));
     document.querySelectorAll(".js-theme-label").forEach(el => (el.textContent = isLight ? "Tối" : "Sáng"));
     document.querySelectorAll(".js-theme-status").forEach(el => (el.textContent = isLight ? "Chế độ Sáng" : "Chế độ Tối"));
 

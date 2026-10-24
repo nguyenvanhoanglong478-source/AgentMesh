@@ -233,7 +233,7 @@ async def run_comprehensive_audit():
         else:
             await weeknd_pl.click()
             try:
-                await page.wait_for_selector("#track-list .qrow[data-idx]", timeout=6000)
+                await page.wait_for_selector("#track-list .qrow[data-idx]", timeout=9500)
                 weeknd_tracks = await page.locator("#track-list .qrow[data-idx]").count()
                 print(f"  ✓ Tuyển tập The Weeknd: Mở thành công với {weeknd_tracks} bài hát!", flush=True)
             except Exception as e:
