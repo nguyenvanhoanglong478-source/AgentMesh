@@ -1115,7 +1115,7 @@ html, body {
           <span class="status-dot"></span>
           <span>OpenMusic</span>
         </div>
-        <span class="mono dim truncate js-user-status">Chế độ thử nghiệm</span>
+        
       </div>
 
       <div class="top-center">
@@ -1824,9 +1824,6 @@ const AudioEngine = (function () {
 
     if (currentRefTrackId === trackKey) {
       if (refAudio && refAudio.src) {
-        if (window.AppState && window.AppState.pos === 0) {
-          try { refAudio.currentTime = 0; } catch (e) {}
-        }
         if (shouldPlayNow() && refAudio.paused) refAudio.play().catch(() => {});
         else if (!shouldPlayNow() && !refAudio.paused) refAudio.pause();
       }
@@ -1914,9 +1911,7 @@ const AudioEngine = (function () {
       }
       refAudio.loop = false;
       refAudio.onended = null;
-      try { refAudio.currentTime = 0; } catch (e) {}
       refAudio.src = track.previewUrl;
-      try { refAudio.currentTime = 0; } catch (e) {}
       if (!refMediaSource && ctx) {
         try {
           refMediaSource = ctx.createMediaElementSource(refAudio);
@@ -1926,20 +1921,12 @@ const AudioEngine = (function () {
       }
       if (refAudibleGain) refAudibleGain.gain.value = 1.0;
       refAudio.onloadedmetadata = () => {
-        try { refAudio.currentTime = 0; } catch (e) {}
         if (refAudio.duration && isFinite(refAudio.duration)) {
           track.d = Math.max(1, Math.round(refAudio.duration));
           if (window.fmtTime) {
             document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
           }
         }
-      };
-      refAudio.oncanplay = () => {
-        try {
-          if (!window.AppState || window.AppState.pos === 0) {
-            refAudio.currentTime = 0;
-          }
-        } catch (e) {}
       };
       refAudio.onerror = () => {
         console.warn('AudioEngine: open audio preview failed or CORS blocked', track.previewUrl);
@@ -1973,17 +1960,7 @@ const AudioEngine = (function () {
       return;
     }
 
-    // 3. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
-    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id) {
-      window.SpotifyClient.fetchAudioAnalysis(track.id).then(data => {
-        if (data && currentRefTrackId === trackKey) {
-          spotifyAnalysis = data;
-          if (data.track && data.track.tempo) {
-            track.bpm = Math.round(data.track.tempo);
-          }
-        }
-      }).catch(() => {});
-    }
+
 
     // 4. Fetch silent reference audio stream for Spotify tracks via public iTunes Search API
     // - Feeds 100% real vocal/drum/bass FFT into analyser (for the 3D visualizer)
@@ -2020,9 +1997,8 @@ const AudioEngine = (function () {
           refMediaSource.connect(refAudibleGain);
         } catch (e) {}
       }
-      // CRITICAL: Mute speaker gain to 0.0 for all Spotify tracks so the user ONLY hears Spotify!
       if (refAudibleGain) {
-        refAudibleGain.gain.value = 0.0;
+        refAudibleGain.gain.value = 1.0;
       }
       refAudio.volume = 1.0;
       if (shouldPlayNow()) {
@@ -2388,6 +2364,7 @@ const AudioEngine = (function () {
     getVolume: () => volume,
     isMuted: () => muted,
     getSourceMode: () => sourceMode,
+    getRefAudio: () => refAudio,
     bands
   };
 })();
@@ -2899,7 +2876,7 @@ const AppState = {
   searchOffset: 0,
   searchHasMore: false,
   spotifyActive: false,
-  userName: 'Chế độ thử nghiệm',
+  userName: 'OpenMusic',
   activeDeviceName: 'Trình phát Web · OpenMusic',
   devices: [
     { id: 'local-web', name: 'Trình phát Web · OpenMusic (Máy này)', type: 'Computer', is_active: true },
@@ -2970,7 +2947,7 @@ function bindMediaSessionHandlers() {
     navigator.mediaSession.setActionHandler('seekto', details => {
       if (details && typeof details.seekTime === 'number') {
         AppState.pos = details.seekTime;
-        if (AppState.spotifyActive) SpotifyClient.seekPosition(AppState.pos).catch(() => {});
+        
         if (AudioEngine.seekLocalAudio) AudioEngine.seekLocalAudio(AppState.pos);
         renderMetadata();
       }
@@ -3394,13 +3371,6 @@ function bindCollectionHeaderButtons() {
       AudioEngine.ensureContext();
       if (AppState.tracks.length > 0) {
         selectTrack(0, true);
-      } else if (AppState.spotifyActive && AppState.openedCollection && AppState.openedCollection.uri) {
-        SpotifyClient.playContextUri(AppState.openedCollection.uri, 0, SpotifyClient.getWebDeviceId())
-          .then(() => {
-            setPlaying(true, true);
-            showToast('Đang phát: ' + AppState.openedCollection.name);
-          })
-          .catch(() => {});
       }
     };
   }
@@ -3478,22 +3448,7 @@ async function openPlaylist(plId) {
       renderTrackList();
       showToast(`Đã mở: ${colMeta.name} (${preloaded.length} bài)`);
 
-      // If it's a Spotify album or playlist that might have more tracks on the server, fetch in background
-      if (!String(plId).startsWith('lib-alb-') && !String(plId).startsWith('pl-')) {
-        SpotifyClient.fetchPlaylistTracks(
-          plId,
-          500,
-          null,
-          colMeta.kind || 'playlist',
-          null,
-          colMeta.name || ''
-        ).then(fullItems => {
-          if (fullItems && fullItems.length > preloaded.length && AppState.openedCollection === colMeta) {
-            AppState.tracks = fullItems;
-            renderTrackList();
-          }
-        }).catch(() => {});
-      }
+
       return;
     }
 
@@ -3613,6 +3568,40 @@ async function openPlaylist(plId) {
   }
 }
 
+const coverColorCache = new Map();
+function extractCoverColor(url) {
+  if (!url) return Promise.resolve([217, 130, 43]);
+  if (coverColorCache.has(url)) return Promise.resolve(coverColorCache.get(url));
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const cvs = document.createElement('canvas');
+        cvs.width = 16;
+        cvs.height = 16;
+        const c2d = cvs.getContext('2d');
+        c2d.drawImage(img, 0, 0, 16, 16);
+        const data = c2d.getImageData(0, 0, 16, 16).data;
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+          count++;
+        }
+        const rgb = count > 0 ? [Math.round(r / count), Math.round(g / count), Math.round(b / count)] : [217, 130, 43];
+        coverColorCache.set(url, rgb);
+        resolve(rgb);
+      } catch (e) {
+        resolve([217, 130, 43]);
+      }
+    };
+    img.onerror = () => resolve([217, 130, 43]);
+    img.src = url;
+  });
+}
+
 function renderMetadata() {
   const tr = currentTrack();
   if (!tr) return;
@@ -3623,7 +3612,7 @@ function renderMetadata() {
   document.querySelectorAll('.js-time').forEach(el => (el.textContent = fmtTime(AppState.pos)));
 
   if (tr.cover && (!tr.c || tr.c[0] === 217)) {
-    SpotifyClient.extractCoverColor(tr.cover).then(rgb => {
+    extractCoverColor(tr.cover).then(rgb => {
       tr.c = rgb;
     });
   }
@@ -3660,13 +3649,7 @@ function selectTrack(index, autoPlay = false) {
     tr && (tr.localUrl || tr.source === 'open' || tr.isOpenSource || !tr.uri || !tr.uri.startsWith('spotify:'))
   );
 
-  if (AppState.spotifyActive && tr && tr.uri && !isDirectWebOrLocal && autoPlay) {
-    const uris = AppState.tracks.map(x => x.uri).filter(u => u && u.startsWith('spotify:'));
-    const winStart = Math.max(0, AppState.idx - 10);
-    const winUris = uris.slice(winStart, winStart + 80);
-    const relOffset = Math.max(0, AppState.idx - winStart);
-    SpotifyClient.playUris(winUris, relOffset, SpotifyClient.getWebDeviceId(), 0).catch(() => {});
-  }
+
 
   if (autoPlay) {
     // Pass skipRemoteCall = true so setPlaying doesn't send a competing empty resumePlayback() request
@@ -3685,17 +3668,7 @@ function setPlaying(playState, skipRemoteCall = false) {
     AudioEngine.ensureContext();
   }
 
-  if (AppState.spotifyActive && !isDirectWebOrLocal && !skipRemoteCall) {
-    if (AppState.playing) {
-      const uris = AppState.tracks.map(x => x.uri).filter(u => u && u.startsWith('spotify:'));
-      const winStart = Math.max(0, AppState.idx - 10);
-      const winUris = uris.slice(winStart, winStart + 80);
-      const relOffset = Math.max(0, AppState.idx - winStart);
-      SpotifyClient.resumePlayback(winUris, relOffset, AppState.pos * 1000).catch(() => {});
-    } else {
-      SpotifyClient.pausePlayback().catch(() => {});
-    }
-  }
+
   if (AudioEngine.setReferencePlaying) {
     AudioEngine.setReferencePlaying(AppState.playing);
   }
@@ -3726,7 +3699,7 @@ function nextTrack() {
 function prevTrack() {
   if (AppState.pos > 4) {
     AppState.pos = 0;
-    if (AppState.spotifyActive) SpotifyClient.seekPosition(0).catch(() => {});
+    
     if (AudioEngine.seekLocalAudio) AudioEngine.seekLocalAudio(0);
     renderMetadata();
   } else {
@@ -4342,9 +4315,7 @@ function initApp() {
 
   function commitSeekPosition(targetPos) {
     AppState.pos = targetPos;
-    if (AppState.spotifyActive) {
-      SpotifyClient.seekPosition(targetPos).catch(() => {});
-    }
+
     if (AudioEngine.seekLocalAudio) {
       AudioEngine.seekLocalAudio(targetPos);
     }
@@ -4394,7 +4365,7 @@ function initApp() {
     document.querySelectorAll('.js-vol-fill').forEach(f => (f.style.width = pct + '%'));
     document.querySelectorAll('.js-vol-head').forEach(h => (h.style.left = pct + '%'));
     document.querySelectorAll('.js-vol-lbl').forEach(l => (l.textContent = pct + '%'));
-    if (AppState.spotifyActive) SpotifyClient.setRemoteVolume(pct).catch(() => {});
+    
   }
 
   document.querySelectorAll('.js-vol-preset').forEach(btn => {
