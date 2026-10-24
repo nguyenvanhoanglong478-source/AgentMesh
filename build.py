@@ -113,8 +113,9 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 
       <div class="sec-block">
         <div class="mono sec-label">Nguồn phân tích sóng âm</div>
-        <button class="word js-src-mode on" type="button" data-src="auto">Đồng bộ nội bộ</button>
-        <button class="word js-src-mode" type="button" data-src="mic">Thu âm trực tiếp (Mic)</button>
+        <button class="word js-src-mode on" type="button" data-src="auto">Tự động theo bài hát</button>
+        <button class="word js-src-mode" type="button" data-src="system">Bắt âm thanh máy tính</button>
+        <button class="word js-src-mode" type="button" data-src="mic">Thu qua Micro</button>
       </div>
 
       <div class="sec-block">

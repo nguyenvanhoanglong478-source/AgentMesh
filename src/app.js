@@ -124,6 +124,7 @@ const AppState = {
   ],
   mobDrawer: null // null | 'left' | 'right'
 };
+window.AppState = AppState;
 
 let currentAcc = DEMO_TRACKS[0].c.slice();
 let simTime = 0;
@@ -279,6 +280,9 @@ function renderMetadata() {
       tr.c = rgb;
     });
   }
+  if (AppState.spotifyActive && AudioEngine.syncTrackAudioProfile) {
+    AudioEngine.syncTrackAudioProfile(tr, AppState.playing);
+  }
 }
 
 function selectTrack(index, autoPlay = false) {
@@ -322,6 +326,7 @@ function setPlaying(playState) {
   if (AppState.spotifyActive) {
     if (AppState.playing) SpotifyClient.resumePlayback().catch(() => {});
     else SpotifyClient.pausePlayback().catch(() => {});
+    if (AudioEngine.setReferencePlaying) AudioEngine.setReferencePlaying(AppState.playing);
   }
 
   const iconHTML = AppState.playing ? TASK_ICONS.pause : TASK_ICONS.play;
@@ -835,7 +840,7 @@ function tickFrame(now) {
   }
   visualTime += dt * (AppState.playing ? 1.0 : 0.24);
 
-  const bands = AudioEngine.sampleBands(dt, AppState.playing, simTime, tr.bpm || 112);
+  const bands = AudioEngine.sampleBands(dt, AppState.playing, simTime, tr.bpm || 112, AppState.pos);
 
   // Smoothly interpolate accent color toward current track's cover color
   const targetColor = tr.c || [217, 130, 43];
@@ -963,20 +968,21 @@ function initApp() {
     btn.onclick = () => setVisualMode(Visualizer3D.nextMode());
   });
 
-  // Audio Signal Source Toggle (Synth/Beat vs. Live Mic/Loopback)
+  // Audio Signal Source Toggle (Auto Track FFT / System Loopback / Live Mic)
   document.querySelectorAll('.js-src-mode').forEach(btn => {
     btn.onclick = async () => {
       const target = btn.dataset.src;
-      if (target === 'mic' && AudioEngine.getSourceMode() !== 'mic') {
-        try {
-          await AudioEngine.toggleMicInput();
-          showToast('Đã bật thu tín hiệu âm thanh trực tiếp (Micro/Loopback)');
-        } catch (err) {
-          showToast('Không thể mở Micro — giữ chế độ đồng bộ nội bộ');
+      try {
+        await AudioEngine.setSourceMode(target);
+        if (target === 'system') {
+          showToast('Đã bật bắt âm thanh trực tiếp từ Máy tính / Tab');
+        } else if (target === 'mic') {
+          showToast('Đã bật thu âm trực tiếp qua Micro (Raw Bass)');
+        } else {
+          showToast('Đã bật phân tích phổ âm thanh tự động theo bài hát');
         }
-      } else if (target === 'auto' && AudioEngine.getSourceMode() === 'mic') {
-        await AudioEngine.toggleMicInput();
-        showToast('Đã chuyển về chế độ đồng bộ nội bộ');
+      } catch (err) {
+        showToast(err && err.message ? err.message : 'Không thể mở nguồn âm thanh — giữ chế độ tự động');
       }
       const curMode = AudioEngine.getSourceMode();
       document.querySelectorAll('.js-src-mode').forEach(x => x.classList.toggle('on', x.dataset.src === curMode));

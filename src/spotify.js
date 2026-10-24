@@ -353,6 +353,11 @@ const SpotifyClient = (function () {
     return api('/me/player').catch(() => null);
   }
 
+  async function fetchAudioAnalysis(trackId) {
+    if (!trackId) return null;
+    return api(`/audio-analysis/${encodeURIComponent(trackId)}`).catch(() => null);
+  }
+
   // Auto-paginate all user playlists
   async function fetchPlaylists(maxItems = 200) {
     const all = [];
@@ -497,6 +502,7 @@ const SpotifyClient = (function () {
     fetchRecentTracks,
     fetchCurrentQueue,
     fetchCurrentPlayback,
+    fetchAudioAnalysis,
     fetchPlaylists,
     fetchPlaylistTracks,
     searchTracks,
@@ -514,3 +520,4 @@ const SpotifyClient = (function () {
     getWebDeviceId: () => webDeviceId
   };
 })();
+window.SpotifyClient = SpotifyClient;

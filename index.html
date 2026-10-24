@@ -887,8 +887,9 @@ html, body {
 
       <div class="sec-block">
         <div class="mono sec-label">Nguồn phân tích sóng âm</div>
-        <button class="word js-src-mode on" type="button" data-src="auto">Đồng bộ nội bộ</button>
-        <button class="word js-src-mode" type="button" data-src="mic">Thu âm trực tiếp (Mic)</button>
+        <button class="word js-src-mode on" type="button" data-src="auto">Tự động theo bài hát</button>
+        <button class="word js-src-mode" type="button" data-src="system">Bắt âm thanh máy tính</button>
+        <button class="word js-src-mode" type="button" data-src="mic">Thu qua Micro</button>
       </div>
 
       <div class="sec-block">
@@ -1071,27 +1072,55 @@ html, body {
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
-// ===== VANG AUDIO ENGINE =====
-// 1. WebAudio Synthesizer (plays procedural ambient/electronic music in Demo Mode so the player produces real sound out of the box)
-// 2. Live FFT Analyser (analyses either the internal synth, microphone/system loopback, or beat-synced Spotify envelope)
+// ===== VANG REAL-TIME AUDIO & TRANSIENT ENGINE =====
+// Extracts real 32-band FFT frequency spectra + physical onset/beat transients (punch)
+// Supports:
+// 1. Internal WebAudio multi-section synthesizer (Demo Mode — real FFT through AnalyserNode)
+// 2. Track-matched real audio preview & Spotify segment analysis (Auto Mode when Spotify is active)
+// 3. System / Tab Audio Loopback capture (getDisplayMedia audio)
+// 4. Raw Unfiltered Microphone capture (getUserMedia with AGC/NoiseSuppression disabled)
 
 const AudioEngine = (function () {
   let ctx = null;
   let analyser = null;
   let masterGain = null;
-  let micStream = null;
-  let micSource = null;
+  let silentAnalyserGain = null; // Allows analyzing reference audio without double-playing over Spotify
+  let captureStream = null;
+  let captureSource = null;
   let fftData = null;
-  let sourceMode = 'auto'; // 'auto' | 'mic'
+  let timeData = null;
+  let sourceMode = 'auto'; // 'auto' | 'system' | 'mic'
   let volume = 0.72;
   let muted = false;
 
-  // Procedural Demo Synth state
+  // Real audio reference element for Spotify tracks (fetches real preview stream via CORS-enabled iTunes API)
+  let refAudio = null;
+  let refMediaSource = null;
+  let currentRefTrackId = null;
+  let spotifyAnalysis = null; // Stores /audio-analysis/{id} segments & beats if available
+
+  // Procedural Demo Synth state (rich musical arrangement with drops, fills, and rests)
   let synthTimer = null;
   let stepIdx = 0;
 
-  // Smoothed frequency band outputs (0.0 -> 1.0)
-  const bands = { bass: 0.04, mid: 0.05, high: 0.02, energy: 0.04 };
+  // 32 frequency bins (0.0 -> 1.0) + onset transient detector
+  const NUM_BINS = 32;
+  const bins = new Float32Array(NUM_BINS);
+  const binFloor = new Float32Array(NUM_BINS);
+  let prevRawBass = 0;
+  let prevRawMid = 0;
+  let prevRawHigh = 0;
+
+  // Output state consumed by Visualizer3D & UI meters
+  const bands = {
+    bass: 0,
+    mid: 0,
+    high: 0,
+    energy: 0,
+    punch: 0,      // Sharp transient spike on kick/snare hits (0.0 -> 1.0)
+    snareHit: 0,   // Mid-high transient
+    bins           // 32-band real-time frequency array
+  };
 
   function ensureContext() {
     if (!ctx) {
@@ -1099,14 +1128,20 @@ const AudioEngine = (function () {
       if (!AC) return null;
       ctx = new AC();
       analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.78;
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.52; // Fast response so drum hits are crisp, not smeared
       fftData = new Uint8Array(analyser.frequencyBinCount);
+      timeData = new Uint8Array(analyser.fftSize);
 
       masterGain = ctx.createGain();
       masterGain.gain.value = muted ? 0 : volume;
       masterGain.connect(analyser);
       analyser.connect(ctx.destination);
+
+      // Secondary bus for silent FFT analysis when external Spotify device is outputting audio
+      silentAnalyserGain = ctx.createGain();
+      silentAnalyserGain.gain.value = 0.0;
+      analyser.connect(silentAnalyserGain);
     }
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
@@ -1114,66 +1149,115 @@ const AudioEngine = (function () {
     return ctx;
   }
 
-  // Trigger a warm analog kick + chord + hi-hat step for Demo Mode playback
+  // Dynamic Demo Synthesizer: plays a varied musical structure (Intro, Groove, Drop, Breakdown)
+  // so Demo Mode has genuine quiet passages, drum fills, and heavy bass drops
   function triggerDemoStep(track, step) {
     if (!ctx || ctx.state !== 'running') return;
     const now = ctx.currentTime;
     const bpm = track.bpm || 112;
-    const stepDur = 60 / bpm / 2; // 8th note steps
+    const stepDur = 60 / bpm / 4; // 16th-note resolution for realistic groove
     const root = track.rootHz || 110;
+    const bar = Math.floor(step / 16) % 8; // 8-bar phrase structure
+    const posInBar = step % 16;
 
-    // Kick on 0, 3, 4, 6 (syncopated electronic pattern)
-    if (step % 8 === 0 || step % 8 === 3 || step % 8 === 6) {
+    // Bar 7 is a breakdown/rest bar (almost silent except for a soft pad & riser)
+    const isBreakdown = (bar === 6);
+    const isDropFill = (bar === 7 && posInBar >= 8);
+
+    // 1. Punchy Kick Drum (4-on-the-floor + syncopated ghost kicks)
+    const kickPattern = isDropFill
+      ? (posInBar % 2 === 0)
+      : !isBreakdown && (posInBar === 0 || posInBar === 6 || posInBar === 10 || (bar % 2 === 1 && posInBar === 14));
+
+    if (kickPattern) {
       const osc = ctx.createOscillator();
+      const clickOsc = ctx.createOscillator();
       const g = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(root * 1.35, now);
-      osc.frequency.exponentialRampToValueAtTime(36, now + 0.16);
-      g.gain.setValueAtTime(0.42, now);
+      osc.frequency.setValueAtTime(145, now);
+      osc.frequency.exponentialRampToValueAtTime(42, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(28, now + 0.22);
+
+      clickOsc.type = 'triangle';
+      clickOsc.frequency.setValueAtTime(620, now);
+      clickOsc.frequency.exponentialRampToValueAtTime(80, now + 0.025);
+
+      const vel = (posInBar === 0) ? 0.58 : 0.42;
+      g.gain.setValueAtTime(vel, now);
       g.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
       osc.connect(g);
+      clickOsc.connect(g);
       g.connect(masterGain);
       osc.start(now);
+      clickOsc.start(now);
       osc.stop(now + 0.25);
+      clickOsc.stop(now + 0.03);
     }
 
-    // Warm sub-bass & mid pad chord on beat
-    if (step % 4 === 0) {
-      const ratios = track.chord || [1, 1.2, 1.5, 1.8];
-      const r = ratios[(step / 4) % ratios.length];
+    // 2. Crisp Snare / Clap on backbeats (steps 4 and 12)
+    if ((!isBreakdown && (posInBar === 4 || posInBar === 12)) || (isDropFill && posInBar % 2 === 1)) {
+      const bufSize = Math.floor(ctx.sampleRate * 0.14);
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.28));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buf;
+      const flt = ctx.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.value = 1850;
+      flt.Q.value = 0.9;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.28, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      noise.connect(flt);
+      flt.connect(g);
+      g.connect(masterGain);
+      noise.start(now);
+    }
+
+    // 3. Sub-bass & Melodic Pluck (varies per step so midrange jumps with the melody)
+    const ratios = track.chord || [1, 1.2, 1.5, 1.8];
+    if (posInBar === 0 || posInBar === 3 || posInBar === 7 || posInBar === 10 || posInBar === 14) {
+      const r = ratios[(bar + posInBar) % ratios.length];
       const osc = ctx.createOscillator();
       const flt = ctx.createBiquadFilter();
       const g = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(root * 2 * r, now);
+      osc.type = posInBar % 3 === 0 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(root * (posInBar === 0 ? 1 : 2) * r, now);
       flt.type = 'lowpass';
-      flt.frequency.setValueAtTime(920 + (step % 16) * 65, now);
+      flt.frequency.setValueAtTime(isBreakdown ? 520 : 1350 + (posInBar * 110), now);
+      flt.frequency.exponentialRampToValueAtTime(280, now + stepDur * 2.5);
+      const amp = isBreakdown ? 0.08 : 0.20;
       g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.14, now + 0.04);
-      g.gain.exponentialRampToValueAtTime(0.001, now + stepDur * 3.5);
+      g.gain.linearRampToValueAtTime(amp, now + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, now + stepDur * 2.8);
       osc.connect(flt);
       flt.connect(g);
       g.connect(masterGain);
       osc.start(now);
-      osc.stop(now + stepDur * 3.6);
+      osc.stop(now + stepDur * 2.9);
     }
 
-    // Crisp hi-hat / shimmer on off-beats
-    if (step % 2 === 1) {
-      const bufSize = Math.floor(ctx.sampleRate * 0.045);
+    // 4. Hi-Hat 16th groove
+    if (!isBreakdown && (posInBar % 2 === 1 || posInBar === 2)) {
+      const dur = posInBar === 15 ? 0.09 : 0.035;
+      const bufSize = Math.floor(ctx.sampleRate * dur);
       const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < bufSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.3));
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.25));
       }
       const noise = ctx.createBufferSource();
       noise.buffer = buf;
       const flt = ctx.createBiquadFilter();
       flt.type = 'highpass';
-      flt.frequency.value = 5200;
+      flt.frequency.value = 6500;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.09, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+      g.gain.setValueAtTime(posInBar === 15 ? 0.14 : 0.07, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
       noise.connect(flt);
       flt.connect(g);
       g.connect(masterGain);
@@ -1186,14 +1270,14 @@ const AudioEngine = (function () {
     const tick = () => {
       const tr = getTrackFn();
       const bpm = (tr && tr.bpm) || 112;
-      const ms = (60 / bpm / 2) * 1000;
-      if (isPlayingFn() && !AppState.spotifyActive) {
+      const ms = (60 / bpm / 4) * 1000; // 16th-note clock
+      if (isPlayingFn() && (!window.AppState || !window.AppState.spotifyActive)) {
         ensureContext();
         triggerDemoStep(tr, stepIdx++);
       }
       synthTimer = setTimeout(tick, ms);
     };
-    synthTimer = setTimeout(tick, 120);
+    synthTimer = setTimeout(tick, 100);
   }
 
   function stopDemoSynth() {
@@ -1203,30 +1287,157 @@ const AudioEngine = (function () {
     }
   }
 
-  async function toggleMicInput() {
-    if (sourceMode === 'mic') {
-      if (micStream) {
-        micStream.getTracks().forEach(t => t.stop());
-        micStream = null;
+  // Load real audio reference stream (via public CORS-enabled iTunes API) & Spotify analysis for a track
+  // When Spotify is playing on a remote device or encrypted EME stream, this feeds the real track's
+  // audio waveform into a muted WebAudio node (or plays it directly if no active Spotify device is found)
+  async function syncTrackAudioProfile(track, isPlaying) {
+    if (!track || !track.t) return;
+    const trackKey = track.id || `${track.t}__${track.a}`;
+    if (currentRefTrackId === trackKey) {
+      if (refAudio) {
+        if (isPlaying && refAudio.paused) refAudio.play().catch(() => {});
+        else if (!isPlaying && !refAudio.paused) refAudio.pause();
       }
-      if (micSource) {
-        try { micSource.disconnect(); } catch (e) {}
-        micSource = null;
-      }
-      sourceMode = 'auto';
-      return sourceMode;
+      return;
     }
+    currentRefTrackId = trackKey;
+    spotifyAnalysis = null;
+
+    // 1. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
+    if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id && !track.id.startsWith('demo-')) {
+      window.SpotifyClient.fetchAudioAnalysis(track.id).then(data => {
+        if (data && currentRefTrackId === trackKey) {
+          spotifyAnalysis = data;
+          if (data.track && data.track.tempo) {
+            track.bpm = Math.round(data.track.tempo);
+          }
+        }
+      }).catch(() => {});
+    }
+
+    // 2. Fetch real audio preview stream from public CORS-enabled iTunes Search API
+    // so our WebAudio AnalyserNode gets real vocal/drum/bass FFT for the exact song!
     try {
+      const q = encodeURIComponent(`${track.t} ${track.a}`.trim());
+      const resp = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
+      if (!resp.ok) return;
+      const json = await resp.json();
+      const item = json && json.results && json.results[0];
+      if (!item || !item.previewUrl || currentRefTrackId !== trackKey) return;
+
       ensureContext();
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      micSource = ctx.createMediaStreamSource(micStream);
-      micSource.connect(analyser);
-      sourceMode = 'mic';
-      return sourceMode;
-    } catch (err) {
-      sourceMode = 'auto';
-      throw err;
+      if (!refAudio) {
+        refAudio = new Audio();
+        refAudio.crossOrigin = 'anonymous';
+        refAudio.loop = true;
+      }
+      refAudio.src = item.previewUrl;
+      // Mute audible output when Spotify is already playing the audio, while still feeding the FFT analyser!
+      // Wait: MediaElementSource feeds whatever element volume is set to, so we connect refMediaSource -> analyser
+      // and do NOT connect refMediaSource to ctx.destination when Spotify is playing!
+      if (!refMediaSource && ctx) {
+        refMediaSource = ctx.createMediaElementSource(refAudio);
+        refMediaSource.connect(analyser);
+      }
+      // Disconnect analyser -> destination ONLY if Spotify is playing its own audio, so there is no echo
+      if (ctx && analyser) {
+        try { analyser.disconnect(); } catch (e) {}
+        if (!window.AppState || !window.AppState.spotifyActive) {
+          analyser.connect(ctx.destination);
+        }
+      }
+      refAudio.volume = 0.85;
+      if (isPlaying) {
+        refAudio.play().catch(() => {});
+      }
+    } catch (e) {}
+  }
+
+  function setReferencePlaying(isPlaying) {
+    if (!refAudio) return;
+    if (isPlaying) {
+      if (refAudio.src && refAudio.paused) refAudio.play().catch(() => {});
+    } else {
+      if (!refAudio.paused) refAudio.pause();
     }
+  }
+
+  function stopCaptureStream() {
+    if (captureStream) {
+      captureStream.getTracks().forEach(t => t.stop());
+      captureStream = null;
+    }
+    if (captureSource) {
+      try { captureSource.disconnect(); } catch (e) {}
+      captureSource = null;
+    }
+  }
+
+  // Capture live Microphone with AGC, NoiseSuppression, and EchoCancellation disabled so bass/drums stay raw
+  async function enableMicInput() {
+    stopCaptureStream();
+    ensureContext();
+    captureStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+      video: false
+    });
+    captureSource = ctx.createMediaStreamSource(captureStream);
+    captureSource.connect(analyser);
+    sourceMode = 'mic';
+    return sourceMode;
+  }
+
+  // Capture System / Tab Audio Loopback directly from Windows / Browser Tab
+  async function enableSystemAudioInput() {
+    stopCaptureStream();
+    ensureContext();
+    captureStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+    const audioTracks = captureStream.getAudioTracks();
+    if (!audioTracks.length) {
+      stopCaptureStream();
+      throw new Error('Bạn cần tích chọn "Chia sẻ âm thanh hệ thống / Share tab audio" trong hộp thoại.');
+    }
+    // Stop video track immediately — we only need the raw system/tab audio stream!
+    captureStream.getVideoTracks().forEach(vt => vt.stop());
+    const audioOnlyStream = new MediaStream(audioTracks);
+    captureSource = ctx.createMediaStreamSource(audioOnlyStream);
+    captureSource.connect(analyser);
+    audioTracks[0].onended = () => {
+      sourceMode = 'auto';
+    };
+    sourceMode = 'system';
+    return sourceMode;
+  }
+
+  async function setSourceMode(target) {
+    if (target === 'auto') {
+      stopCaptureStream();
+      sourceMode = 'auto';
+      return sourceMode;
+    }
+    if (target === 'mic') {
+      return enableMicInput();
+    }
+    if (target === 'system') {
+      return enableSystemAudioInput();
+    }
+    return sourceMode;
+  }
+
+  async function toggleMicInput() {
+    if (sourceMode === 'mic') return setSourceMode('auto');
+    return setSourceMode('mic');
   }
 
   function setVolume(val) {
@@ -1245,48 +1456,153 @@ const AudioEngine = (function () {
     return muted;
   }
 
-  // Update bands every animation frame (dt in seconds)
-  function sampleBands(dt, isPlaying, simTime, bpm) {
-    let targetBass = 0.04;
-    let targetMid = 0.05;
-    let targetHigh = 0.02;
+  // Sample real-time 32-band FFT + compute transient onset (punch)
+  function sampleBands(dt, isPlaying, simTime, bpm, trackPosSec = 0) {
+    // If paused and not capturing live mic/system audio, decay cleanly to ZERO (no fake continuous bouncing!)
+    if (!isPlaying && sourceMode === 'auto') {
+      const decay = Math.exp(-dt * 10);
+      bands.bass *= decay;
+      bands.mid *= decay;
+      bands.high *= decay;
+      bands.energy *= decay;
+      bands.punch *= decay;
+      bands.snareHit *= decay;
+      for (let i = 0; i < NUM_BINS; i++) bins[i] *= decay;
+      prevRawBass = 0;
+      prevRawMid = 0;
+      prevRawHigh = 0;
+      return bands;
+    }
 
-    let gotFFT = false;
-    if (analyser && fftData && (isPlaying || sourceMode === 'mic') && ctx && ctx.state === 'running') {
+    let gotRealFFT = false;
+    let rawBass = 0;
+    let rawMid = 0;
+    let rawHigh = 0;
+
+    if (analyser && fftData && ctx && ctx.state === 'running') {
       analyser.getByteFrequencyData(fftData);
-      let bSum = 0, mSum = 0, hSum = 0;
-      for (let i = 1; i <= 10; i++) bSum += fftData[i];
-      for (let i = 11; i <= 55; i++) mSum += fftData[i];
-      for (let i = 56; i <= 140; i++) hSum += fftData[i];
-      if (bSum + mSum + hSum > 15) {
-        targetBass = Math.min(1, (bSum / 10) / 215);
-        targetMid = Math.min(1, (mSum / 45) / 170);
-        targetHigh = Math.min(1, (hSum / 85) / 135);
-        gotFFT = true;
+      let totalSignal = 0;
+      for (let i = 1; i < 180; i++) totalSignal += fftData[i];
+
+      if (totalSignal > 40) {
+        gotRealFFT = true;
+        // Map 512 FFT bins logarithmically into 32 musical frequency bands
+        for (let b = 0; b < NUM_BINS; b++) {
+          const startBin = Math.max(1, Math.floor(Math.pow(b / NUM_BINS, 1.85) * 200));
+          const endBin = Math.max(startBin + 1, Math.floor(Math.pow((b + 1) / NUM_BINS, 1.85) * 200));
+          let sum = 0;
+          for (let k = startBin; k < endBin && k < fftData.length; k++) {
+            sum += fftData[k];
+          }
+          const avg = (sum / (endBin - startBin)) / 255;
+
+          // Update rolling noise floor per bin so steady background noise doesn't inflate the visualizer
+          binFloor[b] = binFloor[b] * 0.96 + avg * 0.04;
+          const dynamicDelta = Math.max(0, avg - binFloor[b] * 0.62);
+          const targetVal = Math.min(1, avg * 0.45 + dynamicDelta * 1.65);
+
+          const rate = targetVal > bins[b] ? 32 : 9.5;
+          bins[b] += (targetVal - bins[b]) * Math.min(1, dt * rate);
+        }
+
+        // Sub-bass & Kick (bins 0..5), Midrange/Vocals (bins 6..18), Highs/Presence (bins 19..31)
+        for (let i = 0; i < 6; i++) rawBass += bins[i];
+        for (let i = 6; i < 19; i++) rawMid += bins[i];
+        for (let i = 19; i < 32; i++) rawHigh += bins[i];
+        rawBass /= 6;
+        rawMid /= 13;
+        rawHigh /= 13;
       }
     }
 
-    // Fallback or hybrid beat-sync envelope (e.g. when Spotify plays on remote device or autoplay is blocked before first gesture)
-    if (!gotFFT && isPlaying) {
-      const tempo = bpm || 114;
-      const beat = simTime * (tempo / 60);
-      const kick = Math.exp(-((beat % 1) * 5.2));
-      const snare = Math.exp(-(((beat + 0.5) % 1) * 7.0));
-      const hat = Math.exp(-(((beat * 2 + 0.25) % 1) * 9.5));
-      targetBass = 0.20 + 0.78 * kick;
-      targetMid = 0.30 + 0.26 * Math.sin(simTime * 1.4) + 0.25 * snare;
-      targetHigh = 0.16 + 0.68 * hat;
+    // 2. If Spotify audio-analysis segments exist for the current song, use exact segment loudness & pitches
+    if (!gotRealFFT && spotifyAnalysis && Array.isArray(spotifyAnalysis.segments)) {
+      const segs = spotifyAnalysis.segments;
+      const t = trackPosSec;
+      // Binary/linear search current segment
+      let seg = null;
+      for (let i = 0; i < segs.length; i++) {
+        if (segs[i].start <= t && (segs[i].start + segs[i].duration) >= t) {
+          seg = segs[i];
+          break;
+        }
+      }
+      if (seg) {
+        gotRealFFT = true;
+        const relT = Math.max(0, t - seg.start);
+        const maxTime = seg.loudness_max_time || 0.05;
+        const env = relT <= maxTime
+          ? (relT / Math.max(0.01, maxTime))
+          : Math.exp(-(relT - maxTime) * 4.5);
+        const loudNorm = Math.max(0, Math.min(1, (seg.loudness_max + 35) / 35));
+        const pitches = seg.pitches || [];
+        for (let b = 0; b < NUM_BINS; b++) {
+          const pVal = pitches[b % 12] || 0.3;
+          const target = Math.min(1, loudNorm * env * pVal);
+          bins[b] += (target - bins[b]) * Math.min(1, dt * 24);
+        }
+        rawBass = (bins[0] + bins[1] + bins[2] + bins[3]) / 4;
+        rawMid = (bins[6] + bins[9] + bins[12] + bins[15]) / 4;
+        rawHigh = (bins[20] + bins[24] + bins[28]) / 3;
+      }
     }
 
-    const smooth = (cur, tgt) => {
-      const rate = tgt > cur ? 22 : 6.5;
+    // 3. Dynamic multi-bar rhythmic synthesis if browser autoplay hasn't unlocked WebAudio yet
+    if (!gotRealFFT && isPlaying) {
+      const tempo = bpm || 114;
+      const beatPos = simTime * (tempo / 60);
+      const bar = Math.floor(beatPos / 4) % 8;
+      const beatInBar = beatPos % 4;
+      const frac = beatPos % 1;
+
+      // Quiet breakdown on bar 6 so even fallback has real musical dynamics & pauses
+      const barIntensity = bar === 6 ? 0.18 : bar === 7 ? 0.85 : 1.0;
+      const isKick = (frac < 0.22) || (beatInBar > 2.45 && beatInBar < 2.7);
+      const kickEnv = isKick ? Math.exp(-(frac % 0.5) * 9.5) * barIntensity : 0;
+      const snareEnv = (Math.floor(beatInBar) % 2 === 1) ? Math.exp(-frac * 8.5) * barIntensity : 0;
+
+      for (let b = 0; b < NUM_BINS; b++) {
+        let v = 0;
+        if (b < 6) v = kickEnv * (1 - b * 0.08);
+        else if (b < 18) v = snareEnv * 0.65 + Math.max(0, Math.sin(beatPos * 2 + b * 0.7)) * 0.32 * barIntensity;
+        else v = Math.exp(-((beatPos * 2) % 1) * 11) * 0.45 * barIntensity;
+        bins[b] += (v - bins[b]) * Math.min(1, dt * 25);
+      }
+      rawBass = kickEnv * 0.92;
+      rawMid = snareEnv * 0.6 + 0.22 * barIntensity;
+      rawHigh = Math.exp(-((beatPos * 2) % 1) * 11) * 0.55 * barIntensity;
+    }
+
+    // Compute sharp onset transients (Punch = positive derivative of bass energy!)
+    const bassJump = Math.max(0, rawBass - prevRawBass);
+    const midJump = Math.max(0, rawMid - prevRawMid);
+    prevRawBass = prevRawBass * 0.65 + rawBass * 0.35;
+    prevRawMid = prevRawMid * 0.70 + rawMid * 0.30;
+    prevRawHigh = prevRawHigh * 0.70 + rawHigh * 0.30;
+
+    if (bassJump > 0.035) {
+      bands.punch = Math.min(1, bands.punch + bassJump * 3.4);
+    } else {
+      bands.punch *= Math.exp(-dt * 11.5); // Fast spring snap-back between beats
+    }
+
+    if (midJump > 0.03) {
+      bands.snareHit = Math.min(1, bands.snareHit + midJump * 2.8);
+    } else {
+      bands.snareHit *= Math.exp(-dt * 12.0);
+    }
+
+    // Fast attack (30), crisp release (9.5) so visuals snap tightly to the music
+    const attackRelease = (cur, tgt) => {
+      const rate = tgt > cur ? 30 : 9.5;
       return cur + (tgt - cur) * Math.min(1, dt * rate);
     };
 
-    bands.bass = smooth(bands.bass, targetBass);
-    bands.mid = smooth(bands.mid, targetMid);
-    bands.high = smooth(bands.high, targetHigh);
-    bands.energy = (bands.bass * 0.5 + bands.mid * 0.35 + bands.high * 0.15);
+    bands.bass = attackRelease(bands.bass, Math.min(1, rawBass + bands.punch * 0.35));
+    bands.mid = attackRelease(bands.mid, rawMid);
+    bands.high = attackRelease(bands.high, rawHigh);
+    bands.energy = bands.bass * 0.48 + bands.mid * 0.34 + bands.high * 0.18;
+
     return bands;
   }
 
@@ -1294,6 +1610,9 @@ const AudioEngine = (function () {
     ensureContext,
     startDemoSynth,
     stopDemoSynth,
+    syncTrackAudioProfile,
+    setReferencePlaying,
+    setSourceMode,
     toggleMicInput,
     setVolume,
     toggleMute,
@@ -1306,10 +1625,13 @@ const AudioEngine = (function () {
 })();
 
 
-// ===== VANG 3D AUDIO VISUALIZER =====
-// Mode 1 ('cluster'): "Khối đốm hạt" — 3D Particle Cluster Sculpture (2,800 glowing organic particles arranged on a golden-spiral 3D sphere + inner core, deformed in 3D space by Bass/Mid/High frequencies with depth-of-field bokeh, core filaments, and interactive orbit).
-// Mode 2 ('ridge'): "Địa hình" — 3D Topographic Frequency Ridgelines (36 stacked horizon lines with active time-cursor ridge in album accent color).
-// Mode 3 ('vortex'): "Xoáy hạt" — Orbital Harmonic Ring Field (particles orbiting in 3D toroidal rings that tilt and pulse with the music).
+// ===== VANG 3D AUDIO-REACTIVE VISUALIZER =====
+// Driven strictly by real-time 32-band FFT spectrum (bands.bins) and beat onset transients (bands.punch):
+// - Stays calm and poised during silence or pause (zero fake continuous sine-wave bouncing)
+// - Snaps outward with physical spring-damping on real kick/snare/vocal transients
+// Mode 1 ('cluster'): "Khối đốm hạt" — 2,400-particle 3D sphere mapped to 32 frequency zones + bass shockwave
+// Mode 2 ('ridge'): "Địa hình" — Real-time 3D Waterfall Spectrogram (34 cascading FFT history ridgelines)
+// Mode 3 ('vortex'): "Xoáy hạt" — 32-ring 3D Orbital Spectrum Vortex
 
 const Visualizer3D = (function () {
   let canvas = null;
@@ -1319,7 +1641,7 @@ const Visualizer3D = (function () {
   let height = 0;
   let dpr = 1;
 
-  // Interactive camera rotation (drag stage to rotate the 3D particle cluster)
+  // Interactive camera rotation (drag stage to rotate the 3D sculpture)
   let rotY = 0;
   let rotX = 0.22;
   let userYaw = 0;
@@ -1328,7 +1650,17 @@ const Visualizer3D = (function () {
   let lastX = 0;
   let lastY = 0;
 
-  // Precomputed 3D particle nodes for "Khối đốm hạt" (Fibonacci sphere + inner shells)
+  // Audio-driven phase (only advances when music actually has energy)
+  let musicPhase = 0;
+  let shockwavePhase = 0;
+
+  // 34-row x 65-column Waterfall Spectrogram history for "Địa hình" (ridge mode)
+  const RIDGE_ROWS = 34;
+  const RIDGE_COLS = 64;
+  const ridgeHistory = [];
+  let ridgeShiftTimer = 0;
+
+  // Precomputed 3D particle nodes for "Khối đốm hạt"
   const NUM_PARTICLES = 2400;
   const particles = [];
 
@@ -1343,19 +1675,34 @@ const Visualizer3D = (function () {
 
       // 3 shells: outer surface (72%), mid-cluster (20%), dense core (8%)
       const shellRoll = (i * 2654435761) % 100;
-      const shell = shellRoll < 72 ? 1.0 : shellRoll < 92 ? 0.68 : 0.36;
-      const baseSize = shell === 1.0 ? 1.55 + (i % 5) * 0.32 : shell === 0.68 ? 1.2 : 2.1;
+      const shell = shellRoll < 72 ? 1.0 : shellRoll < 92 ? 0.68 : 0.34;
+      const baseSize = shell === 1.0 ? 1.5 + (i % 5) * 0.32 : shell === 0.68 ? 1.2 : 2.1;
+
+      // Map each particle to one of the 32 FFT frequency bins based on its 3D position
+      // Equator (|y| near 0) = Bass & Kick (bins 0..9)
+      // Mid-latitudes = Vocals & Synths (bins 10..21)
+      // Poles (|y| near 1) = Hi-hats & Treble (bins 22..31)
+      const latNorm = Math.abs(y);
+      const lonWave = (Math.sin(theta * 3) * 0.5 + 0.5);
+      const binIdx = Math.min(31, Math.floor(latNorm * 22 + lonWave * 10));
 
       particles.push({
         bx: Math.cos(theta) * r,
         by: y,
         bz: Math.sin(theta) * r,
         shell,
+        binIdx,
+        lobe: Math.sin(theta * 4 + y * 5),
         seed: (i * 0.137) % (Math.PI * 2),
         size: baseSize,
-        ringAngle: (i / NUM_PARTICLES) * Math.PI * 2 * 12,
-        ringRadius: 0.45 + (i / NUM_PARTICLES) * 1.15
+        ringAngle: (i / NUM_PARTICLES) * Math.PI * 2 * 16,
+        ringRadius: 0.32 + (i / NUM_PARTICLES) * 1.25
       });
+    }
+
+    ridgeHistory.length = 0;
+    for (let r = 0; r < RIDGE_ROWS; r++) {
+      ridgeHistory.push(new Float32Array(RIDGE_COLS + 1));
     }
   }
 
@@ -1400,56 +1747,69 @@ const Visualizer3D = (function () {
     canvas.height = Math.round(height * dpr);
   }
 
-  // Smooth 3D harmonic field displacement (simulates 3D simplex noise cleanly at 60fps)
-  function displace3D(x, y, z, t, bass, mid, high) {
-    const n1 = Math.sin(x * 2.7 + t * 1.4) * Math.cos(y * 2.5 - t * 1.1) * Math.sin(z * 2.9 + t * 0.9);
-    const n2 = Math.sin(x * 5.3 - t * 2.2 + y * 3.1) * Math.cos(z * 4.8 + t * 1.9);
-    const ripple = Math.sin((x * x + y * y) * 11.0 - t * 5.5) * high * 0.14;
-    return 1.0 + bass * 0.24 + n1 * (0.22 + mid * 0.48) + n2 * (0.08 + high * 0.22) + ripple;
+  // Compute strictly audio-reactive 3D radial displacement for each particle
+  function computeAudioDisplacement(p, bands, bins) {
+    const binVal = bins ? bins[p.binIdx] : bands.mid;
+    const punch = bands.punch || 0;
+    const snare = bands.snareHit || 0;
+
+    // 1. Direct frequency bin bounce along directional 3D lobes
+    const lobeDir = 0.45 + 0.55 * Math.sin(p.bx * 3.5 + p.bz * 3.5 + musicPhase * 1.4) * Math.cos(p.by * 4.0 - musicPhase);
+    const freqBounce = binVal * (0.28 + lobeDir * 0.58);
+
+    // 2. Kick drum transient shockwave (explodes outward from equator & core on beat hits)
+    const equatorWeight = 1.0 - Math.abs(p.by) * 0.55;
+    const kickBounce = punch * equatorWeight * (p.shell === 1.0 ? 0.52 : 0.72);
+
+    // 3. Snare / vocal harmonic ripple
+    const harmonicRipple = snare * 0.25 * Math.cos(p.by * 8.0 - shockwavePhase * 4.0);
+
+    return 0.92 + freqBounce + kickBounce + harmonicRipple;
   }
 
-  // Render Mode 1: "Khối đốm hạt" (3D Particle Cluster Sculpture)
-  function drawCluster(time, bands, acc, isMobile) {
+  // Render Mode 1: "Khối đốm hạt" (Audio-Reactive 3D Particle Cluster)
+  function drawCluster(bands, acc, isMobile) {
     const w = canvas.width;
     const h = canvas.height;
     const cx = w * 0.5;
     const cy = h * (isMobile ? 0.44 : 0.45);
-    const scale = Math.min(w, h) * (isMobile ? 0.31 : 0.30);
+    const scale = Math.min(w, h) * (isMobile ? 0.30 : 0.29);
+    const punch = bands.punch || 0;
+    const bins = bands.bins;
 
-    // Clear with deep warm ink + subtle radial ambient glow
+    // Clear with deep warm ink + audio-reactive ambient core glow
     ctx.fillStyle = '#0E0D0B';
     ctx.fillRect(0, 0, w, h);
 
-    const glowR = scale * (1.55 + bands.bass * 0.45);
-    const grad = ctx.createRadialGradient(cx, cy, scale * 0.05, cx, cy, glowR);
-    grad.addColorStop(0, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, ${0.18 + bands.bass * 0.16})`);
-    grad.addColorStop(0.55, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, 0.04)`);
+    const glowR = scale * (1.25 + bands.bass * 0.65 + punch * 0.55);
+    const grad = ctx.createRadialGradient(cx, cy, scale * 0.04, cx, cy, glowR);
+    const glowAlpha = Math.min(0.42, 0.08 + bands.energy * 0.22 + punch * 0.22);
+    grad.addColorStop(0, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, ${glowAlpha.toFixed(3)})`);
+    grad.addColorStop(0.55, `rgba(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])}, ${(glowAlpha * 0.22).toFixed(3)})`);
     grad.addColorStop(1, 'rgba(14, 13, 11, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
     const yaw = rotY + userYaw;
-    const pitch = rotX + userPitch + Math.sin(time * 0.35) * 0.12;
+    const pitch = rotX + userPitch + Math.sin(musicPhase * 0.3) * 0.08;
     const cyaw = Math.cos(yaw), syaw = Math.sin(yaw);
     const cpitch = Math.cos(pitch), spitch = Math.sin(pitch);
 
     const fov = 3.2;
     const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
 
-    // Project all particles and bucket by depth so back-to-front rendering is fast
     const projected = new Array(NUM_PARTICLES);
     for (let i = 0; i < NUM_PARTICLES; i++) {
       const p = particles[i];
-      const disp = displace3D(p.bx, p.by, p.bz, time, bands.bass, bands.mid, bands.high);
+      const disp = computeAudioDisplacement(p, bands, bins);
       const rad = p.shell * disp;
 
-      // Subtle tangential swirl on high frequencies
-      const swirl = bands.high * 0.08 * Math.sin(time * 3 + p.seed);
+      // Tangential jitter only when high frequencies (hi-hats/cymbals) are active
+      const swirl = bands.high * 0.12 * Math.sin(musicPhase * 3 + p.seed);
       const px = p.bx * rad - p.bz * swirl;
       const py = p.by * rad;
       const pz = p.bz * rad + p.bx * swirl;
 
-      // Rotate around Y then X
       const x1 = px * cyaw - pz * syaw;
       const z1 = px * syaw + pz * cyaw;
       const y2 = py * cpitch - z1 * spitch;
@@ -1465,124 +1825,177 @@ const Visualizer3D = (function () {
         z: z2,
         persp,
         disp,
+        binVal: bins ? bins[p.binIdx] : bands.mid,
         size: p.size,
-        shell: p.shell,
-        seed: p.seed
+        shell: p.shell
       };
     }
 
-    // Sort back-to-front (largest z is furthest away)
     projected.sort((a, b) => b.z - a.z);
 
-    // Draw particles with depth-of-field bokeh and rim-light coloring
     for (let i = 0; i < NUM_PARTICLES; i++) {
       const pt = projected[i];
-      // Normalized depth: 0 (back) -> 1 (front)
       const depthNorm = Math.max(0, Math.min(1, (1.3 - pt.z) / 2.6));
-      const peakFactor = Math.max(0, Math.min(1, (pt.disp - 0.92) * 1.85));
+      const peakFactor = Math.max(0, Math.min(1, (pt.disp - 0.94) * 1.65));
 
-      // Color blend between warm paper (#ECE5D8) and album accent color on crests & front rim
-      const mix = Math.min(1, peakFactor * 0.85 + (pt.shell < 0.5 ? 0.65 : 0) + bands.bass * 0.25);
+      // Color shifts toward album accent strictly when the particle's frequency bin or beat punch fires
+      const mix = Math.min(1, peakFactor * 0.9 + pt.binVal * 0.45 + (pt.shell < 0.5 ? 0.55 : 0) + punch * 0.35);
       const r = Math.round(236 * (1 - mix) + ar * mix);
       const g = Math.round(229 * (1 - mix) + ag * mix);
       const b = Math.round(216 * (1 - mix) + ab * mix);
 
-      const alpha = (0.14 + Math.pow(depthNorm, 1.45) * 0.78) * (pt.shell === 1.0 ? 1.0 : 0.72);
-      const radius = (pt.size * dpr * pt.persp * (0.85 + bands.bass * 0.45 + peakFactor * 0.35));
+      const alpha = (0.14 + Math.pow(depthNorm, 1.4) * 0.80) * (pt.shell === 1.0 ? 1.0 : 0.75);
+      const radius = pt.size * dpr * pt.persp * (0.78 + pt.binVal * 0.55 + punch * 0.50);
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
       ctx.beginPath();
-      ctx.arc(pt.sx, pt.sy, Math.max(0.7 * dpr, radius), 0, Math.PI * 2);
+      ctx.arc(pt.sx, pt.sy, Math.max(0.65 * dpr, radius), 0, Math.PI * 2);
       ctx.fill();
 
-      // Soft outer halo on bright front crest particles
-      if (depthNorm > 0.76 && peakFactor > 0.52 && (i % 6 === 0)) {
-        ctx.fillStyle = `rgba(${ar}, ${ag}, ${ab}, ${(alpha * 0.22).toFixed(3)})`;
+      // Bokeh halo on particles actively firing with the music
+      if (depthNorm > 0.72 && (peakFactor > 0.38 || punch > 0.25) && (i % 5 === 0)) {
+        ctx.fillStyle = `rgba(${ar}, ${ag}, ${ab}, ${(alpha * (0.18 + punch * 0.22)).toFixed(3)})`;
         ctx.beginPath();
-        ctx.arc(pt.sx, pt.sy, radius * 2.6, 0, Math.PI * 2);
+        ctx.arc(pt.sx, pt.sy, radius * (2.4 + punch * 1.2), 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // Render Mode 2: "Địa hình" (Topographic Ridgelines)
-  function drawRidge(time, bands, acc, progressRatio, isMobile) {
-    const w = canvas.width;
-    const h = canvas.height;
-    const N = 34;
-    const top = h * 0.14;
-    const bot = h * (isMobile ? 0.76 : 0.68);
-    const st = (bot - top) / N;
-    const active = Math.floor(Math.max(0, Math.min(0.999, progressRatio)) * N);
+  // Update the 34-row Waterfall Spectrogram buffer from the real 32-band FFT spectrum
+  function updateRidgeSpectrogram(dt, bands) {
+    const bins = bands.bins;
+    const punch = bands.punch || 0;
+    const front = ridgeHistory[0];
 
-    ctx.fillStyle = '#0E0D0B';
-    ctx.fillRect(0, 0, w, h);
+    // Map the 32 FFT bins symmetrically across the 64 columns:
+    // Center (col 32) = Sub-Bass & Kick Drum (bins 0..4)
+    // Mid-wings = Vocals, Guitar, Keys (bins 5..18)
+    // Outer edges = Hi-Hats & Air (bins 19..31)
+    for (let c = 0; c <= RIDGE_COLS; c++) {
+      const distFromCenter = Math.abs(c - RIDGE_COLS / 2) / (RIDGE_COLS / 2); // 0 at center -> 1 at edges
+      const bellWindow = Math.exp(-Math.pow(distFromCenter / 0.52, 2));
+      const fIdx = Math.min(31, Math.floor(distFromCenter * 29));
+      const nextIdx = Math.min(31, fIdx + 1);
+      const frac = (distFromCenter * 29) - fIdx;
+      const rawBin = bins ? (bins[fIdx] * (1 - frac) + bins[nextIdx] * frac) : 0;
 
-    for (let k = 0; k < N; k++) {
-      const y0 = top + k * st;
-      const pts = [];
-      for (let x = 0; x <= w; x += 4 * dpr) {
-        const u = x / w;
-        const env = Math.exp(-Math.pow((u - 0.5) / 0.19, 2));
-        const n =
-          Math.sin(u * 23 + k * 1.7 + time * 1.3) * 0.5 +
-          Math.sin(u * 51 - k * 0.9 + time * 2.1) * 0.3 +
-          Math.sin(u * 9 + k * 0.4 - time * 0.6) * 0.6;
-        const amp = env * (16 + bands.bass * 62 * (0.5 + 0.5 * Math.sin(k * 0.8 + time)) + bands.mid * 28) * (h / 560);
-        const y = y0 - Math.max(0, n * 0.5 + 0.6) * amp - env * bands.high * 5.5 * dpr * Math.sin(u * 120 + time * 8);
-        pts.push([x, y]);
+      // Add organic spatial harmonic detail ONLY scaled by actual audio signal (0 when silent!)
+      const harmonicDetail = rawBin * 0.28 * Math.sin(c * 0.65 + musicPhase * 2.5);
+      const centerKickSpike = (distFromCenter < 0.28) ? punch * (1 - distFromCenter / 0.28) * 0.55 : 0;
+
+      const targetHeight = Math.min(1.35, (rawBin * 0.95 + harmonicDetail + centerKickSpike) * (0.25 + 0.75 * bellWindow));
+      front[c] += (targetHeight - front[c]) * Math.min(1, dt * 28);
+    }
+
+    // Cascade rows backward in 3D waterfall every ~32ms
+    ridgeShiftTimer += dt;
+    if (ridgeShiftTimer >= 0.032) {
+      ridgeShiftTimer = 0;
+      for (let r = RIDGE_ROWS - 1; r >= 1; r--) {
+        const dst = ridgeHistory[r];
+        const src = ridgeHistory[r - 1];
+        for (let c = 0; c <= RIDGE_COLS; c++) {
+          dst[c] = dst[c] * 0.25 + src[c] * 0.74;
+        }
       }
-
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      for (let j = 0; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]);
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fillStyle = '#0E0D0B';
-      ctx.fill();
-
-      ctx.beginPath();
-      for (let j = 0; j < pts.length; j++) {
-        if (j === 0) ctx.moveTo(pts[j][0], pts[j][1]);
-        else ctx.lineTo(pts[j][0], pts[j][1]);
-      }
-      if (k === active) {
-        ctx.strokeStyle = `rgb(${Math.round(acc[0])}, ${Math.round(acc[1])}, ${Math.round(acc[2])})`;
-        ctx.lineWidth = 2.0 * dpr;
-      } else {
-        ctx.strokeStyle = `rgba(236, 229, 216, ${(0.20 + 0.58 * (k / N)).toFixed(3)})`;
-        ctx.lineWidth = 1.1 * dpr;
-      }
-      ctx.stroke();
     }
   }
 
-  // Render Mode 3: "Xoáy hạt" (3D Orbital Harmonic Vortex)
-  function drawVortex(time, bands, acc, isMobile) {
+  // Render Mode 2: "Địa hình" (Real-Time 3D Waterfall Spectrogram Terrain)
+  function drawRidge(bands, acc, progressRatio, isMobile) {
     const w = canvas.width;
     const h = canvas.height;
-    const cx = w * 0.5;
-    const cy = h * (isMobile ? 0.44 : 0.45);
-    const scale = Math.min(w, h) * 0.32;
+    const top = h * 0.16;
+    const bot = h * (isMobile ? 0.76 : 0.70);
+    const st = (bot - top) / RIDGE_ROWS;
+    const maxAmp = h * (isMobile ? 0.19 : 0.22);
 
     ctx.fillStyle = '#0E0D0B';
     ctx.fillRect(0, 0, w, h);
 
     const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
-    const tiltX = 0.62 + userPitch * 0.6 + Math.sin(time * 0.4) * 0.12;
-    const tiltY = userYaw + time * 0.18;
+
+    // Draw from back (oldest row = RIDGE_ROWS - 1) to front (live FFT row = 0)
+    for (let rIdx = RIDGE_ROWS - 1; rIdx >= 0; rIdx--) {
+      const screenRow = (RIDGE_ROWS - 1) - rIdx; // 0 at top (back), RIDGE_ROWS-1 at bottom (front)
+      const yBase = top + screenRow * st;
+      const rowData = ridgeHistory[rIdx];
+      const depthFactor = screenRow / (RIDGE_ROWS - 1); // 0 (back) -> 1 (front)
+
+      // Perspective tapering (back rows slightly narrower than front rows)
+      const rowWidth = w * (0.72 + 0.28 * depthFactor);
+      const xStart = (w - rowWidth) * 0.5;
+
+      ctx.beginPath();
+      ctx.moveTo(xStart, h);
+      for (let c = 0; c <= RIDGE_COLS; c++) {
+        const u = c / RIDGE_COLS;
+        const x = xStart + u * rowWidth;
+        const val = rowData[c];
+        const y = yBase - val * maxAmp * (0.45 + 0.55 * depthFactor);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(xStart + rowWidth, h);
+      ctx.closePath();
+      ctx.fillStyle = '#0E0D0B';
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let c = 0; c <= RIDGE_COLS; c++) {
+        const u = c / RIDGE_COLS;
+        const x = xStart + u * rowWidth;
+        const val = rowData[c];
+        const y = yBase - val * maxAmp * (0.45 + 0.55 * depthFactor);
+        if (c === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      // Highlight the live front row (rIdx === 0) and the song progress cursor row in album accent color
+      const cursorRow = Math.floor((1 - Math.max(0, Math.min(0.999, progressRatio))) * (RIDGE_ROWS - 1));
+      if (rIdx === 0) {
+        ctx.strokeStyle = `rgb(${ar}, ${ag}, ${ab})`;
+        ctx.lineWidth = (2.1 + (bands.punch || 0) * 1.2) * dpr;
+      } else if (rIdx === cursorRow) {
+        ctx.strokeStyle = `rgba(${ar}, ${ag}, ${ab}, 0.78)`;
+        ctx.lineWidth = 1.6 * dpr;
+      } else {
+        ctx.strokeStyle = `rgba(236, 229, 216, ${(0.15 + 0.62 * depthFactor).toFixed(3)})`;
+        ctx.lineWidth = 1.05 * dpr;
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Render Mode 3: "Xoáy hạt" (3D Spectrum Ring Vortex)
+  function drawVortex(bands, acc, isMobile) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w * 0.5;
+    const cy = h * (isMobile ? 0.44 : 0.45);
+    const scale = Math.min(w, h) * 0.32;
+    const bins = bands.bins;
+    const punch = bands.punch || 0;
+
+    ctx.fillStyle = '#0E0D0B';
+    ctx.fillRect(0, 0, w, h);
+
+    const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
+    const tiltX = 0.62 + userPitch * 0.6 + Math.sin(musicPhase * 0.35) * 0.08;
+    const tiltY = userYaw + musicPhase * 0.22;
     const ctX = Math.cos(tiltX), stX = Math.sin(tiltX);
     const ctY = Math.cos(tiltY), stY = Math.sin(tiltY);
 
     for (let i = 0; i < NUM_PARTICLES; i += 2) {
       const p = particles[i];
-      const ang = p.ringAngle + time * (0.45 + (1.6 - p.ringRadius) * 0.35);
-      const wave = Math.sin(ang * 3 + time * 2.2) * (0.06 + bands.mid * 0.18);
-      const r = p.ringRadius * (0.85 + bands.bass * 0.25);
+      const binVal = bins ? bins[p.binIdx] : bands.mid;
+      const ang = p.ringAngle + musicPhase * (0.35 + (1.6 - p.ringRadius) * 0.45);
 
+      // Ring radius and vertical wave jump strictly when its frequency bin & bass punch hit
+      const r = p.ringRadius * (0.82 + binVal * 0.38 + punch * 0.26);
+      const y0 = Math.sin(ang * 3 + musicPhase * 2) * (binVal * 0.32 + punch * 0.18);
       const x0 = Math.cos(ang) * r;
       const z0 = Math.sin(ang) * r;
-      const y0 = wave + Math.cos(ang * 5 - time * 3) * bands.high * 0.12;
 
       const x1 = x0 * ctY - z0 * stY;
       const z1 = x0 * stY + z0 * ctY;
@@ -1594,12 +2007,12 @@ const Visualizer3D = (function () {
       const sy = cy + y2 * scale * persp * 1.4;
 
       const depth = Math.max(0.1, Math.min(1, (1.4 - z2) / 2.8));
-      const isAcc = (i % 7 === 0);
+      const isAcc = (binVal > 0.42 || i % 7 === 0);
       ctx.fillStyle = isAcc
-        ? `rgba(${ar}, ${ag}, ${ab}, ${(depth * 0.9).toFixed(3)})`
-        : `rgba(236, 229, 216, ${(depth * 0.65).toFixed(3)})`;
+        ? `rgba(${ar}, ${ag}, ${ab}, ${(depth * (0.65 + binVal * 0.35)).toFixed(3)})`
+        : `rgba(236, 229, 216, ${(depth * 0.62).toFixed(3)})`;
 
-      const rad = Math.max(0.8 * dpr, p.size * 0.9 * dpr * persp * (0.9 + bands.bass * 0.4));
+      const rad = Math.max(0.75 * dpr, p.size * 0.9 * dpr * persp * (0.8 + binVal * 0.65 + punch * 0.45));
       ctx.beginPath();
       ctx.arc(sx, sy, rad, 0, Math.PI * 2);
       ctx.fill();
@@ -1608,15 +2021,23 @@ const Visualizer3D = (function () {
 
   function renderFrame(dt, time, bands, acc, progressRatio, isPlaying) {
     if (!canvas || !ctx) return;
-    rotY += dt * (isPlaying ? 0.26 + bands.bass * 0.18 : 0.07);
-    const isMobile = window.innerWidth <= 900;
+    const energy = bands.energy || 0;
+    const punch = bands.punch || 0;
 
+    // Advance rotation and wave phase strictly proportional to real music energy & transients
+    rotY += dt * (isPlaying ? (0.08 + energy * 0.55 + punch * 0.85) : 0.02);
+    musicPhase += dt * (isPlaying ? (0.12 + energy * 2.6 + punch * 4.2) : 0.0);
+    shockwavePhase += dt * (isPlaying ? (0.4 + punch * 6.0) : 0.0);
+
+    updateRidgeSpectrogram(dt, bands);
+
+    const isMobile = window.innerWidth <= 900;
     if (mode === 'cluster') {
-      drawCluster(time, bands, acc, isMobile);
+      drawCluster(bands, acc, isMobile);
     } else if (mode === 'ridge') {
-      drawRidge(time, bands, acc, progressRatio, isMobile);
+      drawRidge(bands, acc, progressRatio, isMobile);
     } else {
-      drawVortex(time, bands, acc, isMobile);
+      drawVortex(bands, acc, isMobile);
     }
   }
 
@@ -1999,6 +2420,11 @@ const SpotifyClient = (function () {
     return api('/me/player').catch(() => null);
   }
 
+  async function fetchAudioAnalysis(trackId) {
+    if (!trackId) return null;
+    return api(`/audio-analysis/${encodeURIComponent(trackId)}`).catch(() => null);
+  }
+
   // Auto-paginate all user playlists
   async function fetchPlaylists(maxItems = 200) {
     const all = [];
@@ -2143,6 +2569,7 @@ const SpotifyClient = (function () {
     fetchRecentTracks,
     fetchCurrentQueue,
     fetchCurrentPlayback,
+    fetchAudioAnalysis,
     fetchPlaylists,
     fetchPlaylistTracks,
     searchTracks,
@@ -2160,6 +2587,7 @@ const SpotifyClient = (function () {
     getWebDeviceId: () => webDeviceId
   };
 })();
+window.SpotifyClient = SpotifyClient;
 
 
 // ===== VANG APPLICATION CONTROLLER =====
@@ -2288,6 +2716,7 @@ const AppState = {
   ],
   mobDrawer: null // null | 'left' | 'right'
 };
+window.AppState = AppState;
 
 let currentAcc = DEMO_TRACKS[0].c.slice();
 let simTime = 0;
@@ -2443,6 +2872,9 @@ function renderMetadata() {
       tr.c = rgb;
     });
   }
+  if (AppState.spotifyActive && AudioEngine.syncTrackAudioProfile) {
+    AudioEngine.syncTrackAudioProfile(tr, AppState.playing);
+  }
 }
 
 function selectTrack(index, autoPlay = false) {
@@ -2486,6 +2918,7 @@ function setPlaying(playState) {
   if (AppState.spotifyActive) {
     if (AppState.playing) SpotifyClient.resumePlayback().catch(() => {});
     else SpotifyClient.pausePlayback().catch(() => {});
+    if (AudioEngine.setReferencePlaying) AudioEngine.setReferencePlaying(AppState.playing);
   }
 
   const iconHTML = AppState.playing ? TASK_ICONS.pause : TASK_ICONS.play;
@@ -2999,7 +3432,7 @@ function tickFrame(now) {
   }
   visualTime += dt * (AppState.playing ? 1.0 : 0.24);
 
-  const bands = AudioEngine.sampleBands(dt, AppState.playing, simTime, tr.bpm || 112);
+  const bands = AudioEngine.sampleBands(dt, AppState.playing, simTime, tr.bpm || 112, AppState.pos);
 
   // Smoothly interpolate accent color toward current track's cover color
   const targetColor = tr.c || [217, 130, 43];
@@ -3127,20 +3560,21 @@ function initApp() {
     btn.onclick = () => setVisualMode(Visualizer3D.nextMode());
   });
 
-  // Audio Signal Source Toggle (Synth/Beat vs. Live Mic/Loopback)
+  // Audio Signal Source Toggle (Auto Track FFT / System Loopback / Live Mic)
   document.querySelectorAll('.js-src-mode').forEach(btn => {
     btn.onclick = async () => {
       const target = btn.dataset.src;
-      if (target === 'mic' && AudioEngine.getSourceMode() !== 'mic') {
-        try {
-          await AudioEngine.toggleMicInput();
-          showToast('Đã bật thu tín hiệu âm thanh trực tiếp (Micro/Loopback)');
-        } catch (err) {
-          showToast('Không thể mở Micro — giữ chế độ đồng bộ nội bộ');
+      try {
+        await AudioEngine.setSourceMode(target);
+        if (target === 'system') {
+          showToast('Đã bật bắt âm thanh trực tiếp từ Máy tính / Tab');
+        } else if (target === 'mic') {
+          showToast('Đã bật thu âm trực tiếp qua Micro (Raw Bass)');
+        } else {
+          showToast('Đã bật phân tích phổ âm thanh tự động theo bài hát');
         }
-      } else if (target === 'auto' && AudioEngine.getSourceMode() === 'mic') {
-        await AudioEngine.toggleMicInput();
-        showToast('Đã chuyển về chế độ đồng bộ nội bộ');
+      } catch (err) {
+        showToast(err && err.message ? err.message : 'Không thể mở nguồn âm thanh — giữ chế độ tự động');
       }
       const curMode = AudioEngine.getSourceMode();
       document.querySelectorAll('.js-src-mode').forEach(x => x.classList.toggle('on', x.dataset.src === curMode));
