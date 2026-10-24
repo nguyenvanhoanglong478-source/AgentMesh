@@ -332,18 +332,19 @@ async def run_comprehensive_audit():
         # -------------------------------------------------------------
         print("\n>>> [7/8] Đang kiểm tra Tính năng Playlist Tự tạo (Spotify Style) & An toàn dữ liệu...", flush=True)
 
-        # 1. Check Spotify & Device Modals exist and are square (border-radius: 0px)
+        # 1. Check Spotify Modal exists & square (0px), and Device Modal is completely removed
         sp_modal_count = await page.locator("#spotify-modal").count()
         dev_modal_count = await page.locator("#device-modal").count()
-        if sp_modal_count == 0 or dev_modal_count == 0:
-            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Thiếu modal Spotify ({sp_modal_count}) hoặc Device ({dev_modal_count})"})
+        if sp_modal_count == 0:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Thiếu modal Spotify ({sp_modal_count})"})
+        elif dev_modal_count > 0:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Device chưa được loại bỏ hoàn toàn"})
         else:
             sp_rad = await page.locator("#spotify-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
-            dev_rad = await page.locator("#device-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
-            if sp_rad not in ["0px", "0"] or dev_rad not in ["0px", "0"]:
-                findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Spotify/Device không đạt chuẩn hình vuông (border-radius: 0px)"})
+            if sp_rad not in ["0px", "0"]:
+                findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Spotify không đạt chuẩn hình vuông (border-radius: 0px)"})
             else:
-                print("  ✓ Modal Hybrid: Modal Spotify & Device switcher sẵn sàng, chuẩn hình vuông 100% (0px)", flush=True)
+                print("  ✓ Modal Hybrid: Modal Spotify sẵn sàng (chuẩn hình vuông 0px), Device Switcher đã loại bỏ 100%", flush=True)
 
         # 2. Test Create Playlist Modal
         await page.locator(".js-btn-new-playlist").first.click()

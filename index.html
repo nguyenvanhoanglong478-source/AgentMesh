@@ -937,27 +937,6 @@ html, body {
   color: var(--acc);
 }
 
-.device-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 0;
-  cursor: pointer;
-  gap: 10px;
-  transition: border-color 0.18s ease, background 0.18s ease;
-}
-
-.device-item:hover {
-  border-color: var(--line-strong);
-}
-
-.device-item.active {
-  border-color: var(--acc);
-  background: rgba(var(--acc-rgb), 0.09);
-}
-
 /* Update Notification Banner */
 .update-banner {
   position: fixed;
@@ -1147,18 +1126,10 @@ html, body {
         <span class="mono dim truncate js-user-status" style="max-width:140px">Web Mở</span>
       </div>
 
-      <div class="top-center">
-        <span class="mono dim">Đầu ra:</span>
-        <button class="word mono js-open-devices" type="button" title="Chọn thiết bị phát qua Spotify Connect / Trình phát Web">
-          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · OpenMusic</span>
-        </button>
-      </div>
-
       <div class="top-right">
         <button class="word mono js-toggle-theme" type="button" title="Chuyển chế độ Sáng / Tối" aria-label="Đổi giao diện">
           <span class="js-theme-label">Sáng</span>
         </button>
-        <button class="word mono js-open-devices" type="button" title="Danh sách thiết bị phát">Thiết bị</button>
         <button class="word mono js-open-spotify" type="button" title="Kết nối tài khoản Spotify">Spotify</button>
         <button id="btn-top-new-playlist" class="word mono on js-btn-new-playlist" type="button" title="Tạo danh sách phát mới">+ Tạo Playlist</button>
       </div>
@@ -1447,23 +1418,7 @@ html, body {
     </div>
   </div>
 
-  <!-- MODAL 2: SPOTIFY CONNECT DEVICE SWITCHER -->
-  <div id="device-modal" class="modal-backdrop" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title">
-      <div class="modal-hdr">
-        <h2 id="dev-modal-title" class="modal-title">Thiết bị phát (Điện thoại &amp; Laptop)</h2>
-        <button class="word mono js-close-devices" type="button">Đóng</button>
-      </div>
-
-      <p class="dim" style="font-size:12px;line-height:1.45">
-        Chọn thiết bị đầu ra âm thanh qua giao thức Spotify Connect.
-      </p>
-
-      <div id="device-list" style="display:flex;flex-direction:column;gap:8px"></div>
-    </div>
-  </div>
-
-    <!-- TOAST -->
+  <!-- TOAST -->
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -2293,12 +2248,11 @@ const SpotifyClient = (function () {
   }
 
   // Helper to execute play request reliably across Web Playback SDK or active Connect devices
-  async function executePlayPayload(payload, preferredDeviceId = null) {
+  async function executePlayPayload(payload) {
     if (sdkPlayer && typeof sdkPlayer.activateElement === 'function') {
       try { await sdkPlayer.activateElement(); } catch (e) {}
     }
-    const targetId = preferredDeviceId || webDeviceId;
-    const q = targetId ? `?device_id=${encodeURIComponent(targetId)}` : '';
+    const q = webDeviceId ? `?device_id=${encodeURIComponent(webDeviceId)}` : '';
     try {
       await api('/me/player/play' + q, {
         method: 'PUT',
@@ -2306,33 +2260,6 @@ const SpotifyClient = (function () {
       });
       return true;
     } catch (err) {
-      // Fallback 1: Try without device_id (uses currently active Spotify device on PC/Phone)
-      if (targetId) {
-        try {
-          await api('/me/player/play', {
-            method: 'PUT',
-            body: payload ? JSON.stringify(payload) : undefined
-          });
-          return true;
-        } catch (err2) {}
-      }
-      // Fallback 2: Discover available devices and play on the first available one
-      try {
-        const devs = await fetchDevices();
-        const dev = devs.find(d => d.is_active) || devs[0];
-        if (dev && dev.id) {
-          await api(`/me/player/play?device_id=${encodeURIComponent(dev.id)}`, {
-            method: 'PUT',
-            body: payload ? JSON.stringify(payload) : undefined
-          });
-          return true;
-        }
-      } catch (err3) {}
-
-      // Fallback 3: Ensure AudioEngine's direct audio output is audible
-      if (window.AudioEngine && window.AudioEngine.setSpotifyDeviceAudible) {
-        window.AudioEngine.setSpotifyDeviceAudible(false);
-      }
       return false;
     }
   }
@@ -2345,7 +2272,7 @@ const SpotifyClient = (function () {
     if (typeof positionMs === 'number') {
       payload.position_ms = Math.max(0, Math.round(positionMs));
     }
-    return executePlayPayload(payload, deviceId);
+    return executePlayPayload(payload);
   }
 
   async function searchTracks(query, offset = 0) {
@@ -2353,18 +2280,6 @@ const SpotifyClient = (function () {
     const q = encodeURIComponent(query.trim());
     const data = await api(`/search?type=track&market=from_token&limit=50&offset=${offset}&q=${q}`);
     return ((data && data.tracks && data.tracks.items) || []).map(it => mapSpotifyTrack(it)).filter(Boolean);
-  }
-
-  async function fetchDevices() {
-    const data = await api('/me/player/devices');
-    return (data && data.devices) || [];
-  }
-
-  async function transferPlayback(deviceId, play = true) {
-    return api('/me/player', {
-      method: 'PUT',
-      body: JSON.stringify({ device_ids: [deviceId], play })
-    });
   }
 
   async function playUris(uris, offsetIndex = 0, deviceId = null, positionMs = 0) {
@@ -2375,7 +2290,7 @@ const SpotifyClient = (function () {
     if (typeof positionMs === 'number') {
       payload.position_ms = Math.max(0, Math.round(positionMs));
     }
-    return executePlayPayload(payload, deviceId);
+    return executePlayPayload(payload);
   }
 
   async function pausePlayback() {
@@ -2508,8 +2423,6 @@ const SpotifyClient = (function () {
     playContextUri,
     searchTracks,
     mapSpotifyTrack,
-    fetchDevices,
-    transferPlayback,
     playUris,
     pausePlayback,
     resumePlayback,
@@ -2641,20 +2554,17 @@ const AudioEngine = (function () {
     }
 
     const isLocal = Boolean(track && track.localUrl);
-    // Continuous playback: web audio loops seamlessly across the song duration; local files play once
-    refAudio.loop = !isLocal;
+    refAudio.loop = false; // Unified: natural playback without 30s repetition loops
     refAudio.volume = 1.0;
     pendingSeekSec = null;
     isSeekingLocal = false;
 
     refAudio.onloadedmetadata = () => {
       if (reqId !== playReqSeq) return;
-      if (isLocal && refAudio.duration && isFinite(refAudio.duration) && refAudio.duration > 0) {
-        track.d = Math.max(1, Math.round(refAudio.duration));
-      } else if (!track.d && refAudio.duration && isFinite(refAudio.duration)) {
+      if (refAudio.duration && isFinite(refAudio.duration) && refAudio.duration > 0) {
         track.d = Math.max(1, Math.round(refAudio.duration));
       }
-      if (window.fmtTime) {
+      if (window.fmtTime && track.d) {
         document.querySelectorAll('.js-dur').forEach(el => (el.textContent = window.fmtTime(track.d)));
       }
       if (pendingSeekSec != null) {
@@ -2672,14 +2582,12 @@ const AudioEngine = (function () {
 
     refAudio.onended = () => {
       if (reqId !== playReqSeq) return;
-      if (isLocal) {
-        if (window.AppState && window.AppState.repeat) {
-          try { refAudio.currentTime = 0; } catch (e) {}
-          if (window.AppState) window.AppState.pos = 0;
-          refAudio.play().catch(() => {});
-        } else if (window.nextTrack) {
-          window.nextTrack();
-        }
+      if (window.AppState && window.AppState.repeat) {
+        try { refAudio.currentTime = 0; } catch (e) {}
+        if (window.AppState) window.AppState.pos = 0;
+        refAudio.play().catch(() => {});
+      } else if (window.nextTrack) {
+        window.nextTrack();
       }
     };
 
@@ -2801,7 +2709,9 @@ const AudioEngine = (function () {
 
   function seekLocalAudio(sec) {
     const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
-    const maxDur = (tr && tr.d > 0) ? tr.d : 300;
+    const maxDur = (refAudio && refAudio.duration && isFinite(refAudio.duration) && refAudio.duration > 0)
+      ? refAudio.duration
+      : ((tr && tr.d > 0) ? tr.d : 300);
     const safeSec = Math.max(0, Math.min(sec, maxDur));
     isSeekingLocal = true;
     seekTargetSec = safeSec;
@@ -2810,15 +2720,13 @@ const AudioEngine = (function () {
     }
 
     if (refAudio && refAudio.src) {
-      const streamDur = (isFinite(refAudio.duration) && refAudio.duration > 1) ? refAudio.duration : 30;
-      const audioSec = (tr && tr.localUrl) ? safeSec : (safeSec % streamDur);
       if (refAudio.readyState >= 1) {
         pendingSeekSec = null;
         try {
-          refAudio.currentTime = Math.max(0, Math.min(audioSec, streamDur > 1 ? streamDur - 0.2 : audioSec));
+          refAudio.currentTime = safeSec;
         } catch (e) {}
       } else {
-        pendingSeekSec = audioSec;
+        pendingSeekSec = safeSec;
       }
       const onSeekDone = () => {
         isSeekingLocal = false;
@@ -2833,12 +2741,10 @@ const AudioEngine = (function () {
   }
 
   function getPlaybackPosition() {
-    const tr = window.AppState && window.AppState.tracks && window.AppState.tracks[window.AppState.idx];
-    if (!tr) return null;
     if (isSeekingLocal || pendingSeekSec != null) {
       return seekTargetSec;
     }
-    if (tr.localUrl && refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
+    if (refAudio && refAudio.src && !refAudio.paused && isFinite(refAudio.currentTime) && refAudio.currentTime >= 0) {
       return refAudio.currentTime;
     }
     return null;
@@ -3435,7 +3341,7 @@ window.Visualizer3D = Visualizer3D;
 // ===== OPENMUSIC APPLICATION CONTROLLER (v1.2.0) =====
 // Security: Strict HTML/URL escaping (XSS-safe), zero persistent user data retention.
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const GITHUB_REPO_URL = 'https://github.com/nguyenvanhoanglong478-source/OpenMusic';
 const GITHUB_RELEASE_API = 'https://api.github.com/repos/nguyenvanhoanglong478-source/OpenMusic/releases/latest';
 
@@ -3459,98 +3365,98 @@ function escUrl(url) {
 
 const DEFAULT_OPEN_TRACKS = [
   {
-    id: 'open-1637380094',
+    id: 'open-full-1',
     source: 'open',
     sourceLabel: 'Web Mở',
-    uri: 'open:track:1637380094',
-    t: 'Bài Này Chill Phết',
-    a: 'Đen & MIN',
-    al: 'Bài Này Chill Phết - Single',
-    d: 277,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/5a/37/c8/5a37c86e-2ca3-48e0-04b5-d47a175dd651/cover.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/09/09/cb/0909cb07-b7dc-315a-296e-8528e7e3c3e7/mzaf_8402416386540560581.plus.aac.p.m4a',
+    uri: 'open:track:full1',
+    t: 'Lofi Study & Chill',
+    a: 'Open Beats & Chill',
+    al: 'Lofi Horizons',
+    d: 182,
+    cover: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://cdn.jsdelivr.net/gh/rafaelreis-hotmart/Audio-Sample-files@master/sample.mp3',
     c: [217, 130, 43],
-    bpm: 112,
+    bpm: 85,
     liked: true,
     isOpenSource: true
   },
   {
-    id: 'open-1499378607',
+    id: 'open-full-2',
     source: 'open',
     sourceLabel: 'Web Mở',
-    uri: 'open:track:1499378607',
-    t: 'Blinding Lights',
-    a: 'The Weeknd',
-    al: 'After Hours',
-    d: 200,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/19/d6/60/19d660ff-e3a9-8377-15a3-ce4b28e89cac/mzaf_18422426156481158187.plus.aac.p.m4a',
+    uri: 'open:track:full2',
+    t: '80s Synth Vibe',
+    a: 'Retro Wave Lab',
+    al: 'Neon Horizon',
+    d: 88,
+    cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://cdn.jsdelivr.net/gh/goldfire/howler.js@master/examples/player/audio/80s_vibe.mp3',
     c: [196, 78, 50],
     bpm: 120,
     liked: true,
     isOpenSource: true
   },
   {
-    id: 'open-1729378207',
+    id: 'open-full-3',
     source: 'open',
     sourceLabel: 'Web Mở',
-    uri: 'open:track:1729378207',
-    t: 'ngủ một mình',
-    a: 'HIEUTHUHAI, Negav & Kewtiie',
-    al: 'ngủ một mình - Single',
-    d: 204,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8e/bb/ff/8ebbff69-0b36-118d-6dab-d2b3a9c3d677/602448945051_Cover.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/0d/2d/29/0d2d2908-709d-c6cc-1f49-1a2567c20a03/mzaf_8401445915932098462.plus.aac.p.m4a',
+    uri: 'open:track:full3',
+    t: 'Rave Digger',
+    a: 'Cyber Club',
+    al: 'Underground Pulse',
+    d: 95,
+    cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://cdn.jsdelivr.net/gh/goldfire/howler.js@master/examples/player/audio/rave_digger.mp3',
     c: [120, 146, 180],
+    bpm: 128,
+    liked: true,
+    isOpenSource: true
+  },
+  {
+    id: 'open-full-4',
+    source: 'open',
+    sourceLabel: 'Web Mở',
+    uri: 'open:track:full4',
+    t: 'Running Out',
+    a: 'Midnight Pulse',
+    al: 'Night Session',
+    d: 71,
+    cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://cdn.jsdelivr.net/gh/goldfire/howler.js@master/examples/player/audio/running_out.mp3',
+    c: [160, 166, 74],
     bpm: 110,
     liked: true,
     isOpenSource: true
   },
   {
-    id: 'open-1649434293',
+    id: 'open-full-5',
     source: 'open',
     sourceLabel: 'Web Mở',
-    uri: 'open:track:1649434293',
-    t: 'Anti-Hero',
-    a: 'Taylor Swift',
-    al: 'Midnights',
-    d: 200,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/3d/01/f2/3d01f2e5-5a08-835f-3d30-d031720b2b80/22UM1IM07364.rgb.jpg.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1d/56/2a/1d562a07-dc5f-a9c0-1f36-2051a8c14eb7/mzaf_7214829135431340590.plus.aac.p.m4a',
-    c: [160, 166, 74],
-    bpm: 97,
-    liked: true,
-    isOpenSource: true
-  },
-  {
-    id: 'open-1739659142',
-    source: 'open',
-    sourceLabel: 'Web Mở',
-    uri: 'open:track:1739659142',
-    t: 'BIRDS OF A FEATHER',
-    a: 'Billie Eilish',
-    al: 'HIT ME HARD AND SOFT',
-    d: 191,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/92/9f/69/929f69f1-9977-3a44-d674-11f70c852d1b/24UMGIM36186.rgb.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/34/31/d3/3431d34e-847f-5d66-df83-0bce688d997e/mzaf_18106743962423782018.plus.aac.p.m4a',
+    uri: 'open:track:full5',
+    t: 'Acoustic Horizon',
+    a: 'Rafael Reis',
+    al: 'Acoustic Sessions',
+    d: 135,
+    cover: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://cdn.jsdelivr.net/gh/rafaelreis-hotmart/Audio-Sample-files@master/sample2.mp3',
     c: [92, 174, 152],
-    bpm: 105,
+    bpm: 96,
     liked: false,
     isOpenSource: true
   },
   {
-    id: 'open-1642030746',
+    id: 'open-full-6',
     source: 'open',
     sourceLabel: 'Web Mở',
-    uri: 'open:track:1642030746',
-    t: 'From The Ashes',
-    a: 'ILLENIUM & Skylar Grey',
-    al: 'From The Ashes - Single',
-    d: 212,
-    cover: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/34/d2/09/34d2095b-b527-f708-68ee-eadbb6c50425/054391834393.jpg/600x600bb.jpg',
-    previewUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1f/30/e1/1f30e181-6854-801f-75de-d2777a497bc1/mzaf_12074059531596553467.plus.aac.p.m4a',
+    uri: 'open:track:full6',
+    t: 'Viper Bassline',
+    a: 'Mozilla Web Audio',
+    al: 'Web Audio Demo',
+    d: 40,
+    cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
+    previewUrl: 'https://raw.githubusercontent.com/mdn/webaudio-examples/main/audio-analyser/viper.mp3',
     c: [196, 160, 104],
-    bpm: 126,
+    bpm: 118,
     liked: false,
     isOpenSource: true
   }
@@ -3662,12 +3568,6 @@ const AppState = {
   searchHasMore: false,
   spotifyActive: false,
   userName: 'OpenMusic',
-  activeDeviceName: 'Trình phát Web · OpenMusic',
-  devices: [
-    { id: 'local-web', name: 'Trình phát Web · OpenMusic (Máy này)', type: 'Computer', is_active: true },
-    { id: 'demo-phone', name: 'iPhone · Spotify Connect', type: 'Smartphone', is_active: false },
-    { id: 'demo-laptop', name: 'Laptop Studio · Spotify Connect', type: 'Computer', is_active: false }
-  ],
   mobDrawer: null,
   sleepMinutes: 0,
   sleepRemainingSec: 0
@@ -4929,63 +4829,6 @@ function closeSpotifyModal() {
   if (m) m.hidden = true;
 }
 
-async function openDeviceModal() {
-  const m = document.getElementById('device-modal');
-  if (!m) return;
-  m.hidden = false;
-  if (AppState.spotifyActive) {
-    try {
-      const devs = await SpotifyClient.fetchDevices();
-      if (devs && devs.length) {
-        AppState.devices = devs;
-      }
-    } catch (e) {}
-  }
-  renderDeviceList();
-}
-
-function closeDeviceModal() {
-  const m = document.getElementById('device-modal');
-  if (m) m.hidden = true;
-}
-
-function renderDeviceList() {
-  const box = document.getElementById('device-list');
-  if (!box) return;
-  box.innerHTML = AppState.devices
-    .map(
-      d => `
-    <div class="device-item${d.is_active ? ' active' : ''}" data-dev="${escHtml(d.id)}">
-      <div>
-        <div style="font-size:13px;color:var(--paper)">${escHtml(d.name)}</div>
-        <div class="mono dim" style="margin-top:2px">${d.type === 'Smartphone' ? 'Điện thoại' : 'Máy tính'}</div>
-      </div>
-      <span class="mono ${d.is_active ? 'acc' : 'dim'}">${d.is_active ? 'Đang phát' : 'Chuyển sang'}</span>
-    </div>`
-    )
-    .join('');
-
-  box.querySelectorAll('[data-dev]').forEach(el => {
-    el.onclick = async () => {
-      const id = el.dataset.dev;
-      AppState.devices.forEach(d => (d.is_active = d.id === id));
-      const chosen = AppState.devices.find(d => d.id === id);
-      if (chosen) {
-        AppState.activeDeviceName = chosen.name;
-        document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = chosen.name));
-      }
-      if (AppState.spotifyActive) {
-        try {
-          await SpotifyClient.transferPlayback(id, true);
-        } catch (e) {}
-      }
-      renderDeviceList();
-      showToast('Đã chuyển âm thanh sang: ' + (chosen ? chosen.name : 'Thiết bị mới'));
-      setTimeout(closeDeviceModal, 350);
-    };
-  });
-}
-
 function mergeUniqueTracks(...arrays) {
   const seen = new Set();
   const out = [];
@@ -5123,18 +4966,6 @@ function applyRemotePlaybackState(pb) {
   }
 }
 
-let remotePollTimer = null;
-function startRemotePlaybackPolling() {
-  if (remotePollTimer) clearInterval(remotePollTimer);
-  remotePollTimer = setInterval(async () => {
-    if (!AppState.spotifyActive) return;
-    const pb = await SpotifyClient.fetchCurrentPlayback();
-    if (pb && pb.item) {
-      applyRemotePlaybackState(pb);
-    }
-  }, 4000);
-}
-
 async function initSpotifySession() {
   try {
     await SpotifyClient.handleCallbackIfPresent();
@@ -5156,7 +4987,6 @@ async function initSpotifySession() {
       showToast('Đã kết nối Spotify: ' + profile.display_name);
 
       await syncFullSpotifyLibrary(true);
-      startRemotePlaybackPolling();
 
       SpotifyClient.initWebPlaybackSDK(
         st => {
@@ -5181,10 +5011,6 @@ async function initSpotifySession() {
               renderTrackList();
             }
           }
-        },
-        devId => {
-          AppState.activeDeviceName = 'OpenMusic Web Player';
-          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'OpenMusic Web Player'));
         }
       );
     }
@@ -5448,8 +5274,6 @@ function initApp() {
   // Spotify Modals & Connect Handlers
   document.querySelectorAll('.js-open-spotify').forEach(b => (b.onclick = openSpotifyModal));
   document.querySelectorAll('.js-close-spotify').forEach(b => (b.onclick = closeSpotifyModal));
-  document.querySelectorAll('.js-open-devices').forEach(b => (b.onclick = openDeviceModal));
-  document.querySelectorAll('.js-close-devices').forEach(b => (b.onclick = closeDeviceModal));
 
   document.querySelectorAll('.js-sync-library').forEach(b => {
     b.onclick = () => {
@@ -5606,10 +5430,26 @@ function initApp() {
       prevTrack();
     } else if (e.key === 'Escape') {
       closeSpotifyModal();
-      closeDeviceModal();
       closeCreatePlaylistModal();
       closeAddToPlaylistModal();
       closeMobileDrawers();
+    }
+  });
+
+  // Global Drag and Drop for Audio Files (.mp3, .flac, .wav, .m4a, .ogg)
+  window.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const audioFiles = Array.from(e.dataTransfer.files).filter(f =>
+        (f.type && f.type.startsWith('audio/')) || /\.(mp3|flac|wav|m4a|ogg|aac|opus)$/i.test(f.name)
+      );
+      if (audioFiles.length) {
+        handleLocalFilesSelected(audioFiles);
+      }
     }
   });
 

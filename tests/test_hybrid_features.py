@@ -49,17 +49,12 @@ with sync_playwright() as p:
     assert sp_modal.get_attribute("hidden") is not None, "Spotify modal should be hidden after close"
     print("   Spotify Modal closed successfully.")
 
-    # 4. Test Device Modal
-    dev_modal = page.locator("#device-modal")
-    page.locator(".js-open-devices").first.click()
-    page.wait_for_timeout(200)
-    assert dev_modal.get_attribute("hidden") is None, "Device modal should be open"
-    device_items_count = page.locator("#device-list .device-item").count()
-    print(f"4. Device Modal opened successfully. Found {device_items_count} device items.")
-    assert device_items_count > 0, "Device list should have items"
-    page.locator(".js-close-devices").first.click()
-    page.wait_for_timeout(200)
-    assert dev_modal.get_attribute("hidden") is not None, "Device modal should be hidden after close"
+    # 4. Verify Device Modal and Device Selector are Completely Removed (as instructed)
+    dev_modal_count = page.locator("#device-modal").count()
+    open_devices_count = page.locator(".js-open-devices").count()
+    assert dev_modal_count == 0, "#device-modal should be completely removed from DOM"
+    assert open_devices_count == 0, ".js-open-devices should be completely removed from DOM"
+    print("4. Device Modal and Device Selector verified: completely removed (count = 0).")
 
     # 5. Test Search Source Switcher
     page.locator(".nav-tabs [data-tab='search']").click()

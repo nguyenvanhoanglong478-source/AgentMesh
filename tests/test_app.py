@@ -32,7 +32,7 @@ async def run_tests():
 
         # T01: Verify Brand & Initial Track Metadata
         title_text = await page.locator(".js-title").inner_text()
-        assert title_text == "Đèn Đường Lúc Ba Giờ", f"Expected initial title, got {title_text}"
+        assert title_text == "Lofi Study & Chill", f"Expected initial title, got {title_text}"
         print("[PASS] T01: Initial track metadata rendered", flush=True)
 
         # T02: Verify Geometric Task Buttons (Play triangle polygon, Prev, Next, Shuffle, Repeat, Volume)
@@ -124,15 +124,10 @@ async def run_tests():
         await page.locator(".js-mute").click()
         print("[PASS] T08: Shuffle, Repeat, Scrubber, and Mute controls operate properly", flush=True)
 
-        # T09: Verify Device Switcher Modal (Phone <-> Laptop Spotify Connect)
-        await page.locator(".topbar .js-open-devices").first.click()
-        await page.wait_for_timeout(150)
-        assert not (await page.locator("#device-modal").is_hidden())
-        await page.locator('#device-list [data-dev="demo-phone"]').click()
-        await page.wait_for_timeout(420)
-        dev_name = await page.locator(".js-device-name").inner_text()
-        assert "iphone" in dev_name.lower(), f"Expected iPhone device active, got {dev_name}"
-        print("[PASS] T09: Cross-device switcher (Phone <-> Laptop) transfers active device", flush=True)
+        # T09: Verify Device Switcher Modal is completely removed (single-player browser engine)
+        assert (await page.locator("#device-modal").count()) == 0
+        assert (await page.locator(".js-open-devices").count()) == 0
+        print("[PASS] T09: Device Switcher Modal & topbar device controls completely removed", flush=True)
 
         # T10: Verify Spotify OAuth PKCE Modal
         await page.locator(".js-open-spotify").click()
