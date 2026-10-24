@@ -1,6 +1,6 @@
-# VANG — Không gian âm thanh 3D Đa Nguồn & Liên kết Spotify (Web Application)
+# OpenMusic — Không gian âm thanh 3D Đa Nguồn & Liên kết Spotify (Web Application)
 
-**VANG** là ứng dụng web phát nhạc không gian 3D tương tác thời gian thực (60fps), kết hợp sức mạnh của **Tài khoản Spotify cá nhân**, **Kho nhạc Web Mở toàn cầu (100M+ bài hát)** và **Bộ nhớ thiết bị ngoại tuyến** trực tiếp trên trình duyệt của mọi thiết bị (Máy tính, Điện thoại, Máy tính bảng).
+**OpenMusic** là ứng dụng web phát nhạc không gian 3D tương tác thời gian thực (60fps), kết hợp sức mạnh của **Tài khoản Spotify cá nhân**, **Kho nhạc Web Mở toàn cầu (100M+ bài hát)** và **Bộ nhớ thiết bị ngoại tuyến** trực tiếp trên trình duyệt của mọi thiết bị (Máy tính, Điện thoại, Máy tính bảng).
 
 ---
 
@@ -16,7 +16,7 @@ Mở ngay trên trình duyệt mà **không cần tải về, không cần cài 
 
 ## 🎶 Hệ sinh thái Âm nhạc Đa Nguồn (Multi-Source Audio Ecosystem)
 
-VANG mang lại trải nghiệm nghe nhạc không ranh giới với 5 nguồn phát linh hoạt:
+OpenMusic mang lại trải nghiệm nghe nhạc không ranh giới với 5 nguồn phát linh hoạt:
 
 1. **🟢 Spotify Thư viện Toàn diện (Spotify Unlimited & Discovery)**:
    - **Tải toàn bộ thư viện cá nhân**: Thuật toán phân trang nền thông minh tải tới **10.000+ bài hát** trong danh sách Yêu thích của bạn mà không bị nghẽn giao diện.
@@ -61,7 +61,7 @@ VANG mang lại trải nghiệm nghe nhạc không ranh giới với 5 nguồn p
 
 ## 🔒 Cam kết Bảo mật & Quyền riêng tư (Zero User Data Retention)
 
-- **100% Không lưu trữ dữ liệu người dùng (Zero-Retention)**: VANG hoạt động hoàn toàn trên trình duyệt người dùng (Client-Side), không có máy chủ trung gian, không có cơ sở dữ liệu và không sử dụng cookie theo dõi.
+- **100% Không lưu trữ dữ liệu người dùng (Zero-Retention)**: OpenMusic hoạt động hoàn toàn trên trình duyệt người dùng (Client-Side), không có máy chủ trung gian, không có cơ sở dữ liệu và không sử dụng cookie theo dõi.
 - **Bảo mật phiên đăng nhập trong RAM**: Mã truy cập Spotify (`access_token`) chỉ tồn tại duy nhất trong bộ nhớ tạm RAM khi tab trình duyệt đang mở. Khi bạn đóng tab hoặc bấm *Ngắt kết nối / Xóa phiên*, 100% dữ liệu bị xóa sạch hoàn toàn khỏi thiết bị.
 - **Chuẩn xác thực bảo mật cao OAuth 2.0 PKCE**: Đăng nhập trực tiếp qua cổng ủy quyền chính thức của Spotify với cơ chế mã hóa chống giả mạo (Anti-CSRF), tuyệt đối không bao giờ yêu cầu hay lưu mật khẩu của người dùng.
 - **Chống tấn công XSS**: Toàn bộ chuỗi dữ liệu đầu vào và thông tin bài hát từ các nguồn đều được khử khuẩn qua bộ lọc `escHtml` và `escUrl` nghiêm ngặt trước khi hiển thị.

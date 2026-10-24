@@ -1,4 +1,4 @@
-// ===== VANG SPOTIFY CLIENT (ZERO-RETENTION OAuth 2.0 PKCE + Web Playback SDK + Connect API) =====
+// ===== OPENMUSIC SPOTIFY CLIENT (ZERO-RETENTION OAuth 2.0 PKCE + Web Playback SDK + Connect API) =====
 // SECURITY & PRIVACY GUARANTEES:
 // 1. Zero Persistent User Data: Access tokens and user profile exist ONLY in volatile RAM (memoryToken).
 //    Closing the tab/app or clicking Logout erases all session tokens immediately (0 bytes stored on disk).
@@ -764,7 +764,7 @@ const SpotifyClient = (function () {
       const setupPlayer = () => {
         if (!window.Spotify || sdkPlayer) return;
         sdkPlayer = new window.Spotify.Player({
-          name: 'Vang · 3D Audio Player',
+          name: 'OpenMusic · 3D Audio Player',
           getOAuthToken: cb => {
             ensureValidToken().then(t => cb(t || ''));
           },

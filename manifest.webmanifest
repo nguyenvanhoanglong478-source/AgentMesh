@@ -1,8 +1,8 @@
 {
-  "id": "com.vang.player",
-  "name": "VANG · Không gian âm thanh 3D cho Spotify",
-  "short_name": "VANG",
-  "description": "Ứng dụng phát nhạc liên kết Spotify trên điện thoại và máy tính với hoạt ảnh 3D Khối đốm hạt phản hồi âm thanh thời gian thực.",
+  "id": "com.openmusic.player",
+  "name": "OpenMusic — Không gian âm thanh 3D",
+  "short_name": "OpenMusic",
+  "description": "Ứng dụng nghe nhạc không gian 3D tương tác thời gian thực trên điện thoại và máy tính với hoạt ảnh Khối đốm hạt phản hồi âm thanh.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

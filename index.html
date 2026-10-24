@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#0E0D0B" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="VANG" />
-  <title>VANG — Không gian âm thanh 3D</title>
+  <meta name="apple-mobile-web-app-title" content="OpenMusic" />
+  <title>OpenMusic — Không gian âm thanh 3D</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon.svg" />
@@ -982,7 +982,7 @@ html, body {
       <div class="brand">
         <div class="brand-mark">
           <span class="status-dot"></span>
-          <span>VANG</span>
+          <span>OpenMusic</span>
         </div>
         <span class="mono dim truncate js-user-status">Chế độ thử nghiệm</span>
       </div>
@@ -990,7 +990,7 @@ html, body {
       <div class="top-center">
         <span class="mono dim">Đầu ra:</span>
         <button class="word mono js-open-devices" type="button">
-          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · Vang</span>
+          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · OpenMusic</span>
         </button>
       </div>
 
@@ -1236,7 +1236,7 @@ html, body {
       </div>
 
       <div style="padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;line-height:1.45" class="dim">
-        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> VANG kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
+        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> OpenMusic kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">
@@ -1457,7 +1457,7 @@ if (typeof window !== 'undefined') {
 }
 
 
-// ===== VANG REAL-TIME AUDIO & TRANSIENT ENGINE =====
+// ===== OPENMUSIC REAL-TIME AUDIO & TRANSIENT ENGINE =====
 // Extracts real 32-band FFT frequency spectra + physical onset/beat transients (punch)
 // Supports:
 // 1. Internal WebAudio multi-section synthesizer (Demo Mode — real FFT through AnalyserNode)
@@ -2653,7 +2653,7 @@ const Visualizer3D = (function () {
 })();
 
 
-// ===== VANG SPOTIFY CLIENT (ZERO-RETENTION OAuth 2.0 PKCE + Web Playback SDK + Connect API) =====
+// ===== OPENMUSIC SPOTIFY CLIENT (ZERO-RETENTION OAuth 2.0 PKCE + Web Playback SDK + Connect API) =====
 // SECURITY & PRIVACY GUARANTEES:
 // 1. Zero Persistent User Data: Access tokens and user profile exist ONLY in volatile RAM (memoryToken).
 //    Closing the tab/app or clicking Logout erases all session tokens immediately (0 bytes stored on disk).
@@ -3419,7 +3419,7 @@ const SpotifyClient = (function () {
       const setupPlayer = () => {
         if (!window.Spotify || sdkPlayer) return;
         sdkPlayer = new window.Spotify.Player({
-          name: 'Vang · 3D Audio Player',
+          name: 'OpenMusic · 3D Audio Player',
           getOAuthToken: cb => {
             ensureValidToken().then(t => cb(t || ''));
           },
@@ -3515,7 +3515,7 @@ const SpotifyClient = (function () {
 window.SpotifyClient = SpotifyClient;
 
 
-// ===== VANG APPLICATION CONTROLLER (v1.2.0) =====
+// ===== OPENMUSIC APPLICATION CONTROLLER (v1.2.0) =====
 // Security: Strict HTML/URL escaping (XSS-safe), zero persistent user data retention.
 
 const APP_VERSION = '1.2.0';
@@ -3728,9 +3728,9 @@ const AppState = {
   searchHasMore: false,
   spotifyActive: false,
   userName: 'Chế độ thử nghiệm',
-  activeDeviceName: 'Trình phát Web · Vang',
+  activeDeviceName: 'Trình phát Web · OpenMusic',
   devices: [
-    { id: 'local-web', name: 'Trình phát Web · Vang (Máy này)', type: 'Computer', is_active: true },
+    { id: 'local-web', name: 'Trình phát Web · OpenMusic (Máy này)', type: 'Computer', is_active: true },
     { id: 'demo-phone', name: 'iPhone · Spotify Connect', type: 'Smartphone', is_active: false },
     { id: 'demo-laptop', name: 'Laptop Studio · Spotify Connect', type: 'Computer', is_active: false }
   ],
@@ -3776,9 +3776,9 @@ function updateMediaSession() {
       ? [{ src: escUrl(tr.cover), sizes: '512x512', type: 'image/jpeg' }]
       : [];
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: tr.t || 'VANG',
+      title: tr.t || 'OpenMusic',
       artist: tr.a || 'Nghệ sĩ',
-      album: tr.al || 'VANG · 3D Audio',
+      album: tr.al || 'OpenMusic · 3D Audio',
       artwork
     });
     navigator.mediaSession.playbackState = AppState.playing ? 'playing' : 'paused';
@@ -4799,8 +4799,8 @@ async function initSpotifySession() {
           }
         },
         devId => {
-          AppState.activeDeviceName = 'Vang Web Player';
-          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'Vang Web Player'));
+          AppState.activeDeviceName = 'OpenMusic Web Player';
+          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'OpenMusic Web Player'));
         }
       );
     }

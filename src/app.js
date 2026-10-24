@@ -1,4 +1,4 @@
-// ===== VANG APPLICATION CONTROLLER (v1.2.0) =====
+// ===== OPENMUSIC APPLICATION CONTROLLER (v1.2.0) =====
 // Security: Strict HTML/URL escaping (XSS-safe), zero persistent user data retention.
 
 const APP_VERSION = '1.2.0';
@@ -211,9 +211,9 @@ const AppState = {
   searchHasMore: false,
   spotifyActive: false,
   userName: 'Chế độ thử nghiệm',
-  activeDeviceName: 'Trình phát Web · Vang',
+  activeDeviceName: 'Trình phát Web · OpenMusic',
   devices: [
-    { id: 'local-web', name: 'Trình phát Web · Vang (Máy này)', type: 'Computer', is_active: true },
+    { id: 'local-web', name: 'Trình phát Web · OpenMusic (Máy này)', type: 'Computer', is_active: true },
     { id: 'demo-phone', name: 'iPhone · Spotify Connect', type: 'Smartphone', is_active: false },
     { id: 'demo-laptop', name: 'Laptop Studio · Spotify Connect', type: 'Computer', is_active: false }
   ],
@@ -259,9 +259,9 @@ function updateMediaSession() {
       ? [{ src: escUrl(tr.cover), sizes: '512x512', type: 'image/jpeg' }]
       : [];
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: tr.t || 'VANG',
+      title: tr.t || 'OpenMusic',
       artist: tr.a || 'Nghệ sĩ',
-      album: tr.al || 'VANG · 3D Audio',
+      album: tr.al || 'OpenMusic · 3D Audio',
       artwork
     });
     navigator.mediaSession.playbackState = AppState.playing ? 'playing' : 'paused';
@@ -1282,8 +1282,8 @@ async function initSpotifySession() {
           }
         },
         devId => {
-          AppState.activeDeviceName = 'Vang Web Player';
-          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'Vang Web Player'));
+          AppState.activeDeviceName = 'OpenMusic Web Player';
+          document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = 'OpenMusic Web Player'));
         }
       );
     }

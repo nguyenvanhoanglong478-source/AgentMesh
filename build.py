@@ -21,8 +21,8 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
   <meta name="theme-color" content="#0E0D0B" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="VANG" />
-  <title>VANG — Không gian âm thanh 3D</title>
+  <meta name="apple-mobile-web-app-title" content="OpenMusic" />
+  <title>OpenMusic — Không gian âm thanh 3D</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon.svg" />
@@ -37,7 +37,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       <div class="brand">
         <div class="brand-mark">
           <span class="status-dot"></span>
-          <span>VANG</span>
+          <span>OpenMusic</span>
         </div>
         <span class="mono dim truncate js-user-status">Chế độ thử nghiệm</span>
       </div>
@@ -45,7 +45,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       <div class="top-center">
         <span class="mono dim">Đầu ra:</span>
         <button class="word mono js-open-devices" type="button">
-          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · Vang</span>
+          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · OpenMusic</span>
         </button>
       </div>
 
@@ -291,7 +291,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       </div>
 
       <div style="padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;line-height:1.45" class="dim">
-        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> VANG kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
+        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> OpenMusic kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
       </div>
 
       <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">

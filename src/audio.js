@@ -1,4 +1,4 @@
-// ===== VANG REAL-TIME AUDIO & TRANSIENT ENGINE =====
+// ===== OPENMUSIC REAL-TIME AUDIO & TRANSIENT ENGINE =====
 // Extracts real 32-band FFT frequency spectra + physical onset/beat transients (punch)
 // Supports:
 // 1. Internal WebAudio multi-section synthesizer (Demo Mode — real FFT through AnalyserNode)

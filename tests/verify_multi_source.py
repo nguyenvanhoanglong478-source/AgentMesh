@@ -14,11 +14,13 @@ print(f"Loaded {HTML_FILE} ({len(content)} bytes)")
 
 errors = []
 
-# 1. Multi-Source Search UI verification
+# 1. Multi-Source Search UI verification & Brand Name
+assert '<span>OpenMusic</span>' in content, "Brand mark must be OpenMusic"
+assert '<title>OpenMusic — Không gian âm thanh 3D</title>' in content, "Title must be OpenMusic"
 assert '<div class="search-source-bar">' in content, "Missing .search-source-bar in HTML"
 assert 'id="src-pill-open"' in content, "Missing #src-pill-open in HTML"
 assert 'id="src-pill-spotify"' in content, "Missing #src-pill-spotify in HTML"
-print("[PASS] 1. Multi-source search UI pills present (#src-pill-open & #src-pill-spotify)")
+print("[PASS] 1. Brand renamed to OpenMusic & Multi-source search UI pills present")
 
 # 2. OpenMusicClient bundling and methods
 assert "const OpenMusicClient = (function" in content, "OpenMusicClient must be defined"
