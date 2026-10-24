@@ -16,11 +16,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com https://*.mzstatic.com; media-src 'self' blob: data: https://*.scdn.co https://*.itunes.apple.com https://*.mzstatic.com; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.github.com https://itunes.apple.com https://*.itunes.apple.com;" />
   <meta name="theme-color" content="#0E0D0B" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="VANG" />
-  <title>VANG — Không gian âm thanh 3D cho Spotify</title>
+  <title>VANG — Không gian âm thanh 3D</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon.svg" />
@@ -30,37 +32,34 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 </head>
 <body>
   <div class="app-shell">
-    <!-- TOP BAR -->
+    <!-- TOP BAR (Single-row fixed Flexbox — never overflows) -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark">
           <span class="status-dot"></span>
-          <span>VANG · 01</span>
+          <span>VANG</span>
         </div>
-        <span class="mono dim js-user-status">Chế độ thử nghiệm</span>
+        <span class="mono dim truncate js-user-status">Chế độ thử nghiệm</span>
       </div>
 
       <div class="top-center">
-        <div class="mono dim">
-          Đầu ra âm thanh:
-          <button class="word js-open-devices" type="button" style="margin-left:6px">
-            <span class="js-device-name">Trình phát Web · Vang (Máy này)</span>
-          </button>
-        </div>
-        <div class="mono dim">60 FPS · 3D AUDIO STAGE</div>
+        <span class="mono dim">Đầu ra:</span>
+        <button class="word mono js-open-devices" type="button">
+          <span class="truncate js-device-name" style="max-width:200px">Trình phát Web · Vang</span>
+        </button>
       </div>
 
       <div class="top-right">
-        <button class="word mono js-open-install" type="button">Tải ứng dụng</button>
-        <button class="word mono js-open-devices" type="button">Thiết bị phát</button>
-        <button class="word mono acc js-open-spotify" type="button">Kết nối Spotify</button>
+        <button class="word mono js-open-install" type="button">Tải App</button>
+        <button class="word mono js-open-devices" type="button">Thiết bị</button>
+        <button class="word mono on js-open-spotify" type="button">Spotify</button>
       </div>
     </header>
 
     <!-- LEFT PANE: LIBRARY & QUEUE -->
     <aside class="left-pane" aria-label="Thư viện và danh sách phát">
       <nav class="nav-tabs" aria-label="Phân mục thư viện">
-        <button class="word on" type="button" data-tab="queue">Danh sách phát</button>
+        <button class="word on" type="button" data-tab="queue">Danh sách</button>
         <button class="word" type="button" data-tab="liked">Yêu thích</button>
         <button class="word" type="button" data-tab="top">Nghe nhiều</button>
         <button class="word" type="button" data-tab="playlists">Tuyển tập</button>
@@ -68,9 +67,13 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <button class="word" type="button" data-tab="search">Tìm kiếm</button>
       </nav>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 26px;border-bottom:1px solid var(--line)">
+      <div class="sub-bar">
         <span class="mono dim js-track-count">6 bài</span>
-        <button class="word mono acc js-sync-library" type="button" style="font-size:11px">Đồng bộ đầy đủ</button>
+        <div style="display:flex;gap:6px">
+          <button id="btn-open-local-files" class="word mono" type="button" style="height:26px;padding:0 8px;font-size:10px" title="Phát nhạc từ bộ nhớ máy (.mp3, .flac, .wav)">+ Nhạc máy</button>
+          <button class="word mono acc js-sync-library" type="button" style="height:26px;padding:0 8px;font-size:10px">Đồng bộ</button>
+        </div>
+        <input id="local-file-input" type="file" accept="audio/*" multiple hidden />
       </div>
 
       <div id="search-wrap" class="search-wrap">
@@ -78,7 +81,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
           id="search-input"
           class="search-input"
           type="search"
-          placeholder="Nhập tên bài hát, nghệ sĩ hoặc album..."
+          placeholder="Tìm bài hát, nghệ sĩ, album..."
           autocomplete="off"
         />
       </div>
@@ -86,14 +89,9 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       <div id="track-list" class="track-list" role="list"></div>
     </aside>
 
-    <!-- CENTER STAGE: 3D PARTICLE CLUSTER & EDITORIAL METADATA -->
+    <!-- CENTER STAGE: 3D PARTICLE CLUSTER & COMPACT METADATA (No clutter text) -->
     <main id="main-stage" class="stage" aria-label="Không gian mô phỏng âm thanh 3D">
       <div class="stage-vignette"></div>
-
-      <div class="stage-hud-top">
-        <div class="mono dim">KÉO CHUỘT HOẶC CHẠM ĐỂ XOAY KHỐI 3D</div>
-        <div class="mono dim">TÍN HIỆU THỜI GIAN THỰC · FFT</div>
-      </div>
 
       <div class="stage-meta">
         <div class="mono track-album js-album">Phố Không Ngủ · 2024</div>
@@ -102,28 +100,97 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       </div>
     </main>
 
-    <!-- RIGHT PANE: VISUALIZER MODES & SIGNAL METERS -->
-    <aside class="right-pane" aria-label="Cấu hình thị giác 3D và phổ tần số">
+    <!-- RIGHT PANE: COMPACT ICON SELECTORS, 3D BOUNCE SLIDER & SIGNAL METERS -->
+    <aside class="right-pane" aria-label="Cấu hình thị giác 3D và âm thanh">
+      <!-- 1. 3D Mode Compact Icons -->
       <div class="sec-block">
-        <div class="mono sec-label">Hình thái 3D</div>
-        <button class="word js-vmode on" type="button" data-m="cluster">Khối đốm hạt</button>
-        <button class="word js-vmode" type="button" data-m="ridge">Địa hình</button>
-        <button class="word js-vmode" type="button" data-m="vortex">Xoáy hạt</button>
+        <div class="sec-hdr">
+          <span class="mono sec-label">Hình thái 3D</span>
+          <span class="mono acc js-vmode-label" style="font-size:10.5px">Khối đốm hạt</span>
+        </div>
+        <div class="icon-grid-3">
+          <button class="icon-btn js-vmode on" type="button" data-m="cluster" title="Khối đốm hạt" aria-label="Khối đốm hạt">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+              <circle cx="10" cy="10" r="2.2"/>
+              <circle cx="10" cy="4" r="1.5"/>
+              <circle cx="10" cy="16" r="1.5"/>
+              <circle cx="4" cy="10" r="1.5"/>
+              <circle cx="16" cy="10" r="1.5"/>
+              <circle cx="5.8" cy="5.8" r="1.3"/>
+              <circle cx="14.2" cy="5.8" r="1.3"/>
+              <circle cx="5.8" cy="14.2" r="1.3"/>
+              <circle cx="14.2" cy="14.2" r="1.3"/>
+            </svg>
+          </button>
+          <button class="icon-btn js-vmode" type="button" data-m="ridge" title="Địa hình sóng" aria-label="Địa hình">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M2 7c2.5 0 3.5-3.5 6-3.5s3.5 3.5 6 3.5 2.5-1.5 4-1.5"/>
+              <path d="M2 11.5c2.5 0 4-4 6.5-4s3.5 4 6 4 2-1.5 3.5-1.5"/>
+              <path d="M2 16c3 0 4.5-3 7.5-3s4 3 8.5 3"/>
+            </svg>
+          </button>
+          <button class="icon-btn js-vmode" type="button" data-m="vortex" title="Xoáy hạt quỹ đạo" aria-label="Xoáy hạt">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4">
+              <ellipse cx="10" cy="10" rx="7.5" ry="3.5" transform="rotate(-22 10 10)"/>
+              <ellipse cx="10" cy="10" rx="4.2" ry="1.8" transform="rotate(-22 10 10)"/>
+              <circle cx="10" cy="10" r="1.4" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
+      <!-- 2. 3D Bounce Intensity Slider -->
       <div class="sec-block">
-        <div class="mono sec-label">Nguồn phân tích sóng âm</div>
-        <button class="word js-src-mode on" type="button" data-src="auto">Tự động theo bài hát</button>
-        <button class="word js-src-mode" type="button" data-src="system">Bắt âm thanh máy tính</button>
-        <button class="word js-src-mode" type="button" data-src="mic">Thu qua Micro</button>
+        <div class="sec-hdr">
+          <span class="mono sec-label">Độ nảy sóng 3D</span>
+          <span class="mono acc js-bounce-val" style="font-size:10.5px">100%</span>
+        </div>
+        <input
+          id="bounce-slider"
+          class="range-slider"
+          type="range"
+          min="0"
+          max="200"
+          step="5"
+          value="100"
+          aria-label="Độ nảy sóng âm 3D"
+        />
       </div>
 
+      <!-- 3. Audio Signal Source Compact Icons -->
       <div class="sec-block">
-        <div class="mono sec-label">Phổ tần số (FFT)</div>
+        <div class="sec-hdr">
+          <span class="mono sec-label">Nguồn sóng âm</span>
+          <span class="mono acc js-src-label" style="font-size:10.5px">Tự động</span>
+        </div>
+        <div class="icon-grid-3">
+          <button class="icon-btn js-src-mode on" type="button" data-src="auto" title="Tự động theo bài hát" aria-label="Tự động theo bài hát">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M3 10h2.5l2-5 3 10 2.5-7 1.5 2H17"/>
+            </svg>
+          </button>
+          <button class="icon-btn js-src-mode" type="button" data-src="system" title="Bắt âm thanh máy tính / Tab" aria-label="Bắt âm thanh máy tính">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="4" width="14" height="9.5" rx="1.5"/>
+              <path d="M7 16.5h6M10 13.5v3"/>
+            </svg>
+          </button>
+          <button class="icon-btn js-src-mode" type="button" data-src="mic" title="Thu qua Micro" aria-label="Thu qua Micro">
+            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="7.5" y="3" width="5" height="8.5" rx="2.5"/>
+              <path d="M5 9.5a5 5 0 0 0 10 0M10 14.5v3M7.5 17.5h5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. FFT Frequency Meters -->
+      <div class="sec-block">
+        <div class="mono sec-label">Phổ tần số</div>
 
         <div class="meter-row">
           <div class="meter-hdr mono">
-            <span class="dim">Trầm · 60Hz</span>
+            <span class="dim">Trầm</span>
             <span class="js-mb-val">0</span>
           </div>
           <div class="meter"><i class="acc-bar js-mb"></i></div>
@@ -131,7 +198,7 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 
         <div class="meter-row">
           <div class="meter-hdr mono">
-            <span class="dim">Trung · 1kHz</span>
+            <span class="dim">Trung</span>
             <span class="js-mm-val">0</span>
           </div>
           <div class="meter"><i class="js-mm"></i></div>
@@ -139,28 +206,35 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
 
         <div class="meter-row">
           <div class="meter-hdr mono">
-            <span class="dim">Cao · 8kHz</span>
+            <span class="dim">Cao</span>
             <span class="js-mh-val">0</span>
           </div>
           <div class="meter"><i class="js-mh"></i></div>
         </div>
       </div>
 
+      <!-- 5. Music Player Utilities (Sleep Timer & Update Check) -->
       <div class="sec-block" style="margin-top:auto">
-        <div class="mono sec-label">Ứng dụng độc lập</div>
-        <div class="dim" style="font-size:12.5px;line-height:1.5">
-          Hỗ trợ dùng trực tiếp trên Web, cài đặt PWA trên Điện thoại hoặc tải bản <button class="word acc js-open-install" type="button" style="font-size:12.5px">VANG.exe</button> chạy độc lập trên PC.
+        <div class="sec-hdr">
+          <span class="mono sec-label">Hẹn giờ tắt</span>
+          <button id="btn-sleep-timer" class="word mono" type="button" style="height:26px;padding:0 8px;font-size:10.5px">
+            <span class="js-sleep-label">Tắt</span>
+          </button>
+        </div>
+        <div class="sec-hdr" style="margin-top:4px">
+          <span class="mono sec-label">Phiên bản v1.2.0</span>
+          <button id="btn-check-update" class="word mono" type="button" style="height:26px;padding:0 8px;font-size:10.5px">Kiểm tra cập nhật</button>
         </div>
       </div>
     </aside>
 
-    <!-- BOTTOM TRANSPORT BAR (Geometric Task Buttons + Scrubber + Volume) -->
+    <!-- BOTTOM TRANSPORT BAR -->
     <footer class="transport" aria-label="Điều khiển phát nhạc">
       <div class="transport-left">
         <button class="ctl-btn js-shuffle" type="button" title="Trộn bài" aria-label="Trộn bài"></button>
         <button class="ctl-btn js-prev" type="button" title="Bài trước" aria-label="Bài trước"></button>
         <button class="ctl-btn play-btn js-play" type="button" title="Phát / Tạm dừng" aria-label="Phát" data-state="paused">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <polygon points="4,2.2 13.8,8 4,13.8"/>
           </svg>
         </button>
@@ -182,57 +256,69 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <div class="vol-track js-vol-track" role="slider" aria-label="Thanh âm lượng">
           <div class="scrub-fill js-vol-fill" style="width:78%"></div>
         </div>
-        <span class="mono dim js-vol-lbl" style="min-width:24px;text-align:right">78</span>
+        <span class="mono dim js-vol-lbl" style="min-width:22px;text-align:right">78</span>
       </div>
     </footer>
 
-    <!-- MOBILE BOTTOM DRAWER BAR -->
+    <!-- MOBILE BOTTOM DRAWER BAR (Uniform 4-column grid) -->
     <nav class="mob-bar" aria-label="Điều hướng di động">
-      <button class="word mono" type="button" data-mob-drawer="left">Danh sách</button>
+      <button class="word mono" type="button" data-mob-drawer="left">Thư viện</button>
       <button class="word mono js-vmode-cycle" type="button">Khối đốm hạt</button>
-      <button class="word mono" type="button" data-mob-drawer="right">Thị giác 3D</button>
+      <button class="word mono" type="button" data-mob-drawer="right">Tùy chỉnh 3D</button>
       <button class="word mono js-open-install" type="button">Tải App</button>
     </nav>
   </div>
 
-  <!-- MODAL 1: SPOTIFY OAUTH PKCE CONNECTION -->
+  <!-- IN-APP GITHUB UPDATE NOTIFICATION BANNER -->
+  <div id="update-banner" class="update-banner" hidden>
+    <div>
+      <div id="update-ver-text" style="font-size:12.5px;font-weight:600;color:var(--acc)">Đã có bản cập nhật mới!</div>
+      <div class="dim" style="font-size:11px;margin-top:2px">Tải bản mới nhất từ trang GitHub chính thức của dự án.</div>
+    </div>
+    <a id="update-link-btn" href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest" target="_blank" rel="noopener noreferrer" class="btn-solid" style="text-decoration:none;height:30px;padding:0 10px">Cập nhật</a>
+    <button id="btn-close-update" class="word mono" type="button" style="height:30px;padding:0 8px">Đóng</button>
+  </div>
+
+  <!-- MODAL 1: SPOTIFY ZERO-RETENTION OAUTH PKCE CONNECTION -->
   <div id="spotify-modal" class="modal-backdrop" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sp-modal-title">
       <div class="modal-hdr">
-        <h2 id="sp-modal-title" class="modal-title">Liên kết tài khoản Spotify</h2>
+        <h2 id="sp-modal-title" class="modal-title">Kết nối tài khoản Spotify</h2>
         <button class="word mono js-close-spotify" type="button">Đóng</button>
       </div>
 
-      <p class="dim" style="font-size:13.5px;line-height:1.55">
-        VANG sử dụng chuẩn bảo mật <strong>OAuth 2.0 PKCE</strong> trực tiếp từ trình duyệt (không cần máy chủ trung gian lưu mật khẩu). Để kết nối tài khoản Spotify cá nhân trên điện thoại và laptop:
-      </p>
+      <div style="padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:11.5px;line-height:1.45" class="dim">
+        <strong style="color:var(--paper)">Cam kết Bảo mật &amp; Quyền riêng tư:</strong> VANG kết nối trực tiếp với Spotify qua chuẩn <strong>OAuth 2.0 PKCE + Anti-CSRF</strong>, <strong>không lưu bất kỳ thông tin cá nhân, mật khẩu hay mã đăng nhập nào</strong> vào ổ cứng máy tính hay máy chủ. Khi bạn đóng ứng dụng hoặc bấm Ngắt kết nối, phiên làm việc trong bộ nhớ RAM được xóa sạch 100%.
+      </div>
 
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px" class="dim">
-        <div>1. Truy cập <strong>developer.spotify.com/dashboard</strong> và tạo một ứng dụng (Create App).</div>
-        <div>2. Thêm địa chỉ Redirect URI dưới đây vào phần cài đặt ứng dụng Spotify:</div>
-        <div id="sp-redirect-uri" class="mono acc" style="padding:8px 10px;background:var(--ink);border:1px solid var(--line);user-select:all"></div>
-        <div>3. Dán <strong>Spotify Client ID</strong> của bạn vào ô bên dưới:</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12px" class="dim">
+        <div>1. Mở <strong>developer.spotify.com/dashboard</strong> → chọn ứng dụng của bạn → mục <strong>Redirect URIs</strong> thêm địa chỉ:</div>
+        <div id="sp-redirect-uri" class="mono acc" style="padding:7px 10px;background:var(--ink);border:1px solid var(--line);border-radius:4px;user-select:all;-webkit-user-select:all"></div>
+        <div>2. Dán mã <strong>Spotify Client ID</strong> vào ô dưới đây và bấm <strong>Đăng nhập Spotify</strong>:</div>
       </div>
 
       <div>
-        <label class="mono dim" for="sp-client-id" style="display:block;margin-bottom:6px">Spotify Client ID</label>
+        <label class="mono dim" for="sp-client-id" style="display:block;margin-bottom:5px">Spotify Client ID</label>
         <input
           id="sp-client-id"
           class="field-input"
           type="text"
-          placeholder="Ví dụ: 8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d"
+          placeholder="Dán Spotify Client ID (32 ký tự)..."
           autocomplete="off"
         />
       </div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
-        <button id="btn-save-client-id" class="btn-outline" type="button">Lưu Client ID</button>
-        <button id="btn-connect-spotify" class="btn-solid" type="button">Đăng nhập Spotify</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+        <button id="btn-logout-spotify" class="btn-outline" type="button">Ngắt kết nối / Xóa phiên</button>
+        <div style="display:flex;gap:8px">
+          <button id="btn-save-client-id" class="btn-outline" type="button">Giữ tạm ID</button>
+          <button id="btn-connect-spotify" class="btn-solid" type="button">Đăng nhập Spotify</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL 2: SPOTIFY CONNECT DEVICE SWITCHER (PHONE <-> LAPTOP) -->
+  <!-- MODAL 2: SPOTIFY CONNECT DEVICE SWITCHER -->
   <div id="device-modal" class="modal-backdrop" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title">
       <div class="modal-hdr">
@@ -240,55 +326,58 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
         <button class="word mono js-close-devices" type="button">Đóng</button>
       </div>
 
-      <p class="dim" style="font-size:13.5px;line-height:1.5">
-        Chọn thiết bị đầu ra âm thanh. Bạn có thể dùng điện thoại làm điều khiển từ xa để phát nhạc trên Laptop hoặc ngược lại qua Spotify Connect.
+      <p class="dim" style="font-size:12px;line-height:1.45">
+        Chọn thiết bị đầu ra âm thanh qua giao thức Spotify Connect.
       </p>
 
-      <div id="device-list" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div id="device-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
 
-  <!-- MODAL 3: STANDALONE APP DOWNLOAD & 1-CLICK PWA INSTALL -->
+  <!-- MODAL 3: STANDALONE ANDROID APK, WINDOWS EXE & PWA DOWNLOAD -->
   <div id="install-modal" class="modal-backdrop" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="inst-modal-title">
       <div class="modal-hdr">
-        <h2 id="inst-modal-title" class="modal-title">Tải &amp; Cài đặt ứng dụng VANG</h2>
+        <h2 id="inst-modal-title" class="modal-title">Tải ứng dụng VANG (Android &amp; PC)</h2>
         <button class="word mono js-close-install" type="button">Đóng</button>
       </div>
 
-      <p class="dim" style="font-size:13.5px;line-height:1.5">
-        Không cần dùng bất kỳ câu lệnh nào. Bạn có thể cài đặt trực tiếp hoặc tải tệp chạy độc lập về máy:
+      <p class="dim" style="font-size:12px;line-height:1.45">
+        Tải trực tiếp bộ cài đặt ứng dụng độc lập hoặc kiểm tra bản cập nhật mới nhất trên GitHub:
       </p>
 
-      <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:10px">
         <div class="device-item" style="cursor:default">
-          <div style="padding-right:12px">
-            <div style="font-size:14.5px;color:var(--paper);font-weight:500">1. Ứng dụng Windows độc lập (VANG.exe)</div>
-            <div class="dim" style="font-size:12.5px;margin-top:3px">
-              Tệp thực thi duy nhất (~100 KB), nhấp đúp chuột là mở cửa sổ ứng dụng riêng biệt trên PC/Laptop.
+          <div style="padding-right:8px">
+            <div style="font-size:13px;color:var(--paper);font-weight:600">1. Ứng dụng Android độc lập (VANG.apk)</div>
+            <div class="dim" style="font-size:11.5px;margin-top:2px">
+              File cài đặt .APK chính thức cho điện thoại Android (hỗ trợ điều khiển màn hình khóa, hẹn giờ tắt, đọc nhạc trong máy &amp; tự báo cập nhật).
             </div>
           </div>
-          <a href="./VANG.exe" download="VANG.exe" class="btn-solid" style="text-decoration:none;white-space:nowrap">Tải VANG.exe</a>
+          <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest/download/VANG.apk" target="_blank" rel="noopener noreferrer" class="btn-solid" style="text-decoration:none">Tải VANG.apk</a>
         </div>
 
         <div class="device-item" style="cursor:default">
-          <div style="padding-right:12px">
-            <div style="font-size:14.5px;color:var(--paper);font-weight:500">2. Cài đặt 1 chạm trên Điện thoại &amp; Web (PWA)</div>
-            <div class="dim" style="font-size:12.5px;margin-top:3px">
-              Thêm biểu tượng VANG vào màn hình chính iOS, Android, macOS hoặc Windows.
+          <div style="padding-right:8px">
+            <div style="font-size:13px;color:var(--paper);font-weight:600">2. Ứng dụng Windows độc lập (VANG.exe)</div>
+            <div class="dim" style="font-size:11.5px;margin-top:2px">
+              Chạy ngay trên máy tính Windows không cần cài đặt.
             </div>
           </div>
-          <button id="btn-pwa-install" class="btn-outline" type="button" style="white-space:nowrap">Cài đặt ngay</button>
+          <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases/latest/download/VANG.exe" target="_blank" rel="noopener noreferrer" class="btn-outline" style="text-decoration:none">Tải VANG.exe</a>
         </div>
 
         <div class="device-item" style="cursor:default">
-          <div style="padding-right:12px">
-            <div style="font-size:14.5px;color:var(--paper);font-weight:500">3. Bản Offline chạy mọi thiết bị (.html)</div>
-            <div class="dim" style="font-size:12.5px;margin-top:3px">
-              Tải 1 tệp duy nhất tích hợp sẵn toàn bộ đồ họa 3D và bộ phát âm thanh để mở mọi lúc.
+          <div style="padding-right:8px">
+            <div style="font-size:13px;color:var(--paper);font-weight:600">3. Cài nhanh từ trình duyệt &amp; Trang GitHub</div>
+            <div class="dim" style="font-size:11.5px;margin-top:2px">
+              Thêm vào màn hình chính iOS/Android hoặc xem toàn bộ các bản phát hành trên GitHub.
             </div>
           </div>
-          <a href="./index.html" download="VANG-Player.html" class="btn-outline" style="text-decoration:none;white-space:nowrap">Tải bản Offline</a>
+          <div style="display:flex;gap:6px">
+            <button id="btn-pwa-install" class="btn-outline" type="button">Cài PWA</button>
+            <a href="https://github.com/nguyenvanhoanglong478-source/Vang-Player/releases" target="_blank" rel="noopener noreferrer" class="btn-outline" style="text-decoration:none">GitHub</a>
+          </div>
         </div>
       </div>
     </div>
@@ -324,6 +413,16 @@ preview_artifact = Path(r"C:\Users\nguye\.gemini\antigravity\brain\dcbc4ce6-22e7
 if preview_artifact.parent.exists():
     preview_artifact.write_text(HTML_TEMPLATE, encoding="utf-8")
     print(f"Updated artifact {preview_artifact}")
+
+# Sync offline bundle into Android assets directory
+android_assets = ROOT / "android" / "app" / "src" / "main" / "assets"
+android_assets.mkdir(parents=True, exist_ok=True)
+(android_assets / "index.html").write_text(HTML_TEMPLATE, encoding="utf-8")
+for asset_name in ["manifest.webmanifest", "sw.js", "icon.svg"]:
+    src_f = ROOT / asset_name
+    if src_f.exists():
+        (android_assets / asset_name).write_bytes(src_f.read_bytes())
+print(f"Synced offline assets to {android_assets}")
 
 # Compile standalone Windows executable (VANG.exe) with embedded web assets
 csc_path = Path(r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe")

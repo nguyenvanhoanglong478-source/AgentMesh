@@ -26,6 +26,7 @@ const Visualizer3D = (function () {
   // Audio-driven phase (only advances when music actually has energy)
   let musicPhase = 0;
   let shockwavePhase = 0;
+  let bounceGain = 1.0; // Adjustable 3D bounce sensitivity (0.0 -> 2.0)
 
   // 34-row x 65-column Waterfall Spectrogram history for "Địa hình" (ridge mode)
   const RIDGE_ROWS = 34;
@@ -91,24 +92,63 @@ const Visualizer3D = (function () {
   }
 
   function bindPointer(el) {
-    el.addEventListener('pointerdown', e => {
-      if (e.target.closest('button, input, a')) return;
+    if (!el) return;
+    if (el.style) el.style.touchAction = 'none';
+    if (canvas && canvas.style) canvas.style.touchAction = 'none';
+
+    const onStart = (x, y, target) => {
+      if (target && target.closest && target.closest('button, input, a')) return false;
       dragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    });
-    window.addEventListener('pointermove', e => {
+      lastX = x;
+      lastY = y;
+      return true;
+    };
+
+    const onMove = (x, y) => {
       if (!dragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      userYaw += dx * 0.006;
-      userPitch = Math.max(-0.85, Math.min(0.85, userPitch + dy * 0.006));
-    });
-    window.addEventListener('pointerup', () => {
+      const dx = x - lastX;
+      const dy = y - lastY;
+      lastX = x;
+      lastY = y;
+      const sens = window.innerWidth <= 900 ? 0.0085 : 0.006;
+      userYaw += dx * sens;
+      userPitch = Math.max(-0.95, Math.min(0.95, userPitch + dy * sens));
+    };
+
+    const onEnd = () => {
       dragging = false;
+    };
+
+    // Pointer Events (Desktop + Modern Mobile)
+    el.addEventListener('pointerdown', e => {
+      if (onStart(e.clientX, e.clientY, e.target)) {
+        if (el.setPointerCapture && e.pointerId !== undefined) {
+          try { el.setPointerCapture(e.pointerId); } catch (err) {}
+        }
+      }
     });
+    el.addEventListener('pointermove', e => onMove(e.clientX, e.clientY));
+    el.addEventListener('pointerup', onEnd);
+    el.addEventListener('pointercancel', onEnd);
+
+    // Explicit Touch Events fallback for mobile WebViews / Safari / Android browsers
+    el.addEventListener('touchstart', e => {
+      if (!e.touches || !e.touches.length) return;
+      const t = e.touches[0];
+      if (onStart(t.clientX, t.clientY, e.target)) {
+        if (e.cancelable) e.preventDefault();
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchmove', e => {
+      if (!dragging || !e.touches || !e.touches.length) return;
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      onMove(t.clientX, t.clientY);
+    }, { passive: false });
+
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
   }
 
   function resize() {
@@ -122,9 +162,9 @@ const Visualizer3D = (function () {
 
   // Compute strictly audio-reactive 3D radial displacement for each particle
   function computeAudioDisplacement(p, bands, bins) {
-    const binVal = bins ? bins[p.binIdx] : bands.mid;
-    const punch = bands.punch || 0;
-    const snare = bands.snareHit || 0;
+    const binVal = (bins ? bins[p.binIdx] : bands.mid) * bounceGain;
+    const punch = (bands.punch || 0) * bounceGain;
+    const snare = (bands.snareHit || 0) * bounceGain;
 
     // 1. Direct frequency bin bounce along directional 3D lobes
     const lobeDir = 0.45 + 0.55 * Math.sin(p.bx * 3.5 + p.bz * 3.5 + musicPhase * 1.4) * Math.cos(p.by * 4.0 - musicPhase);
@@ -257,7 +297,7 @@ const Visualizer3D = (function () {
       const harmonicDetail = rawBin * 0.28 * Math.sin(c * 0.65 + musicPhase * 2.5);
       const centerKickSpike = (distFromCenter < 0.28) ? punch * (1 - distFromCenter / 0.28) * 0.55 : 0;
 
-      const targetHeight = Math.min(1.35, (rawBin * 0.95 + harmonicDetail + centerKickSpike) * (0.25 + 0.75 * bellWindow));
+      const targetHeight = Math.min(1.65, (rawBin * 0.95 + harmonicDetail + centerKickSpike) * (0.25 + 0.75 * bellWindow) * bounceGain);
       front[c] += (targetHeight - front[c]) * Math.min(1, dt * 28);
     }
 
@@ -361,12 +401,12 @@ const Visualizer3D = (function () {
 
     for (let i = 0; i < NUM_PARTICLES; i += 2) {
       const p = particles[i];
-      const binVal = bins ? bins[p.binIdx] : bands.mid;
+      const binVal = (bins ? bins[p.binIdx] : bands.mid) * bounceGain;
       const ang = p.ringAngle + musicPhase * (0.35 + (1.6 - p.ringRadius) * 0.45);
 
       // Ring radius and vertical wave jump strictly when its frequency bin & bass punch hit
-      const r = p.ringRadius * (0.82 + binVal * 0.38 + punch * 0.26);
-      const y0 = Math.sin(ang * 3 + musicPhase * 2) * (binVal * 0.32 + punch * 0.18);
+      const r = p.ringRadius * (0.82 + binVal * 0.38 + punch * bounceGain * 0.26);
+      const y0 = Math.sin(ang * 3 + musicPhase * 2) * (binVal * 0.32 + punch * bounceGain * 0.18);
       const x0 = Math.cos(ang) * r;
       const z0 = Math.sin(ang) * r;
 
@@ -427,12 +467,19 @@ const Visualizer3D = (function () {
     return mode;
   }
 
+  function setBounceGain(val) {
+    bounceGain = Math.max(0, Math.min(2.5, Number(val) || 0));
+    return bounceGain;
+  }
+
   return {
     mount,
     resize,
     renderFrame,
     setMode,
     nextMode,
-    getMode: () => mode
+    getMode: () => mode,
+    setBounceGain,
+    getBounceGain: () => bounceGain
   };
 })();

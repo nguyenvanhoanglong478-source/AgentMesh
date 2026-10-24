@@ -197,7 +197,8 @@ const AudioEngine = (function () {
       const tr = getTrackFn();
       const bpm = (tr && tr.bpm) || 112;
       const ms = (60 / bpm / 4) * 1000; // 16th-note clock
-      if (isPlayingFn() && (!window.AppState || !window.AppState.spotifyActive)) {
+      const isLocalFile = !!(tr && tr.localUrl);
+      if (isPlayingFn() && !isLocalFile && (!window.AppState || !window.AppState.spotifyActive)) {
         ensureContext();
         triggerDemoStep(tr, stepIdx++);
       }
@@ -228,6 +229,33 @@ const AudioEngine = (function () {
     }
     currentRefTrackId = trackKey;
     spotifyAnalysis = null;
+
+    // 0. If track is a Local Audio File (.mp3/.flac/.wav/.m4a) selected from device storage:
+    if (track.localUrl) {
+      ensureContext();
+      if (!refAudio) {
+        refAudio = new Audio();
+        refAudio.crossOrigin = 'anonymous';
+      }
+      refAudio.loop = false;
+      refAudio.src = track.localUrl;
+      if (!refMediaSource && ctx) {
+        refMediaSource = ctx.createMediaElementSource(refAudio);
+        refMediaSource.connect(masterGain);
+      }
+      if (ctx && analyser) {
+        try { analyser.disconnect(); } catch (e) {}
+        analyser.connect(ctx.destination);
+      }
+      refAudio.onloadedmetadata = () => {
+        if (refAudio.duration && isFinite(refAudio.duration)) {
+          track.d = Math.max(1, Math.round(refAudio.duration));
+        }
+      };
+      refAudio.volume = 1.0;
+      if (isPlaying) refAudio.play().catch(() => {});
+      return;
+    }
 
     // 1. If Spotify token is active, try fetching Spotify's audio-features / audio-analysis
     if (window.SpotifyClient && window.SpotifyClient.hasToken && window.SpotifyClient.hasToken() && track.id && !track.id.startsWith('demo-')) {
@@ -285,6 +313,12 @@ const AudioEngine = (function () {
       if (refAudio.src && refAudio.paused) refAudio.play().catch(() => {});
     } else {
       if (!refAudio.paused) refAudio.pause();
+    }
+  }
+
+  function seekLocalAudio(sec) {
+    if (refAudio && refAudio.src) {
+      try { refAudio.currentTime = Math.max(0, sec); } catch (e) {}
     }
   }
 
@@ -538,6 +572,7 @@ const AudioEngine = (function () {
     stopDemoSynth,
     syncTrackAudioProfile,
     setReferencePlaying,
+    seekLocalAudio,
     setSourceMode,
     toggleMicInput,
     setVolume,

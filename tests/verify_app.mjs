@@ -8,14 +8,17 @@ const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));
 const swCode = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
-// 1. Verify HTML & CSS structure
+// 1. Verify HTML & Security Headers
 assert.ok(html.includes('id="main-stage"'), 'HTML must contain #main-stage');
-assert.ok(html.includes('data-m="cluster">Khối đốm hạt</button>'), 'HTML must contain Khối đốm hạt button');
-assert.ok(html.includes('data-m="ridge">Địa hình</button>'), 'HTML must contain Địa hình button');
-assert.ok(html.includes('data-m="vortex">Xoáy hạt</button>'), 'HTML must contain Xoáy hạt button');
+assert.ok(html.includes('http-equiv="Content-Security-Policy"'), 'HTML must enforce strict CSP');
+assert.ok(html.includes('name="referrer" content="no-referrer"'), 'HTML must enforce no-referrer');
+assert.ok(!html.includes('TÍN HIỆU THỜI GIAN THỰC · FFT'), 'Unnecessary HUD text must be removed');
+assert.ok(!html.includes('60 FPS · 3D AUDIO STAGE'), 'Unnecessary topbar text must be removed');
+assert.ok(html.includes('id="bounce-slider"'), 'HTML must contain 3D bounce intensity slider');
+assert.ok(html.includes('class="icon-btn js-vmode on"'), '3D modes must use compact icon buttons');
+assert.ok(html.includes('class="icon-btn js-src-mode on"'), 'Audio sources must use compact icon buttons');
 assert.ok(html.includes('class="ctl-btn play-btn js-play"'), 'HTML must contain Play geometric button');
-assert.ok(html.includes('<polygon points="4,2.2 13.8,8 4,13.8"/>'), 'Initial Play button must have triangle polygon');
-console.log('[PASS] 01. HTML structure, geometric Play triangle icon & "Khối đốm hạt" mode buttons verified');
+console.log('[PASS] 01. Security CSP/no-referrer, compact icon buttons, 3D bounce slider & clean HUD verified');
 
 // 2. Verify PWA Manifest & Service Worker
 assert.equal(manifest.short_name, 'VANG');
@@ -111,6 +114,7 @@ function queryAll(sel) {
 }
 
 const storage = new Map();
+const sessStorage = new Map();
 const sandbox = {
   console,
   Math,
@@ -123,7 +127,7 @@ const sandbox = {
   Number,
   Boolean,
   Promise,
-   URLSearchParams,
+  URLSearchParams,
   setTimeout: (fn, ms) => { if (ms === 280) fn(); return 1; },
   clearTimeout: () => {},
   setInterval: () => 1,
@@ -135,6 +139,12 @@ const sandbox = {
     setItem: (k, v) => storage.set(k, String(v)),
     removeItem: k => storage.delete(k)
   },
+  sessionStorage: {
+    getItem: k => sessStorage.get(k) || null,
+    setItem: (k, v) => sessStorage.set(k, String(v)),
+    removeItem: k => sessStorage.delete(k)
+  },
+  fetch: () => Promise.resolve({ ok: false }),
   location: {
     origin: 'http://localhost:8080',
     pathname: '/index.html',
@@ -219,15 +229,22 @@ const searchHTML = getElById('track-list').innerHTML;
 assert.ok(searchHTML.includes('Mưa Phố Cũ'), 'Search filter should find matching album/track');
 console.log('[PASS] 07. Library tabs (Queue, Liked, Playlists, Recent, Search) verified');
 
-// 7. Verify Spotify Client ID, Device Switcher & Standalone App Install Modal
+// 7. Verify Zero-Retention Security, Playlist/Album Opening, 3D Bounce Slider & Install Modal
 vm.runInContext(`
   SpotifyClient.setClientId('test_spotify_client_123');
+  Visualizer3D.setBounceGain(1.65);
+  openPlaylist('pl-2');
   openDeviceModal();
   openInstallModal();
 `, sandbox);
-assert.equal(storage.get('vang_spotify_client_id'), 'test_spotify_client_123');
-assert.ok(getElById('device-list').innerHTML.includes('iPhone · Spotify Connect'));
+assert.equal(storage.has('vang_spotify_token'), false, 'Zero-retention: localStorage must NEVER store tokens');
+assert.equal(storage.has('vang_spotify_client_id'), false, 'Zero-retention: localStorage must NEVER store client ID');
+assert.equal(SpotifyClient_check(), 1.65);
+function SpotifyClient_check() {
+  return vm.runInContext('Visualizer3D.getBounceGain()', sandbox);
+}
+assert.ok(getElById('track-list').innerHTML.includes('Ambient &amp; Modular'), 'Opening album/playlist must render its tracks and header');
 assert.equal(getElById('install-modal').hidden, false);
-console.log('[PASS] 08. Spotify OAuth PKCE config, Cross-device switcher & Standalone Install Modal verified');
+console.log('[PASS] 08. Zero-retention security, Album/Playlist opening, 3D Bounce Gain & Install Modal verified');
 
 console.log('\n=== ALL 8 VERIFICATION SUITES PASSED 100% ===');
