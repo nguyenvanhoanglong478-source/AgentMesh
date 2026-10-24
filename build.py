@@ -62,10 +62,16 @@ HTML_TEMPLATE = f"""<!DOCTYPE html>
       <nav class="nav-tabs" aria-label="Phân mục thư viện">
         <button class="word on" type="button" data-tab="queue">Danh sách phát</button>
         <button class="word" type="button" data-tab="liked">Yêu thích</button>
+        <button class="word" type="button" data-tab="top">Nghe nhiều</button>
         <button class="word" type="button" data-tab="playlists">Tuyển tập</button>
         <button class="word" type="button" data-tab="recent">Gần đây</button>
         <button class="word" type="button" data-tab="search">Tìm kiếm</button>
       </nav>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 26px;border-bottom:1px solid var(--line)">
+        <span class="mono dim js-track-count">6 bài</span>
+        <button class="word mono acc js-sync-library" type="button" style="font-size:11px">Đồng bộ đầy đủ</button>
+      </div>
 
       <div id="search-wrap" class="search-wrap">
         <input

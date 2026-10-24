@@ -101,14 +101,19 @@ const TASK_ICONS = {
 const AppState = {
   tracks: DEMO_TRACKS.slice(),
   allTracks: DEMO_TRACKS.slice(),
+  likedTracks: [],
+  topTracks: [],
+  recentTracks: [],
   playlists: DEMO_PLAYLISTS.slice(),
   idx: 0,
   pos: 37,
   playing: false,
   shuffle: false,
   repeat: false,
-  tab: 'queue', // 'queue' | 'liked' | 'playlists' | 'recent' | 'search'
+  tab: 'queue', // 'queue' | 'liked' | 'top' | 'playlists' | 'recent' | 'search'
   searchQuery: '',
+  searchOffset: 0,
+  searchHasMore: false,
   spotifyActive: false,
   userName: 'Chế độ thử nghiệm',
   activeDeviceName: 'Trình phát Web · Vang',
@@ -177,7 +182,7 @@ function renderTrackList() {
   }
 
   const cur = currentTrack();
-  container.innerHTML = list
+  let htmlRows = list
     .map((tr, i) => {
       const isCur = cur && tr.id === cur.id;
       const artStyle = tr.cover
@@ -196,6 +201,20 @@ function renderTrackList() {
     })
     .join('');
 
+  if (AppState.tab === 'search' && AppState.spotifyActive && AppState.searchHasMore) {
+    htmlRows += `
+      <div style="padding:14px 0;text-align:center">
+        <button id="btn-load-more-search" class="btn-outline" type="button" style="width:100%">Tải thêm kết quả (+50 bài)</button>
+      </div>`;
+  }
+
+  container.innerHTML = htmlRows;
+
+  // Update count badge if present
+  document.querySelectorAll('.js-track-count').forEach(el => {
+    el.textContent = list.length + ' bài';
+  });
+
   container.querySelectorAll('.qrow[data-idx]').forEach(row => {
     row.onclick = () => {
       const i = Number(row.dataset.idx);
@@ -203,18 +222,33 @@ function renderTrackList() {
       if (window.innerWidth <= 900) closeMobileDrawers();
     };
   });
+
+  const btnMore = document.getElementById('btn-load-more-search');
+  if (btnMore) {
+    btnMore.onclick = () => loadMoreSearchResults();
+  }
 }
 
 async function openPlaylist(plId) {
   if (AppState.spotifyActive) {
     try {
-      showToast('Đang tải danh sách phát...');
-      const items = await SpotifyClient.fetchPlaylistTracks(plId);
+      showToast('Đang tải toàn bộ danh sách phát...');
+      const items = await SpotifyClient.fetchPlaylistTracks(plId, 1000, partial => {
+        if (partial.length) {
+          AppState.tracks = partial;
+          AppState.tab = 'queue';
+          syncNavTabs();
+          renderTrackList();
+        }
+      });
       if (items.length) {
         AppState.tracks = items;
         AppState.tab = 'queue';
         syncNavTabs();
         selectTrack(0, true);
+        showToast(`Đã tải đầy đủ ${items.length} bản nhạc`);
+      } else {
+        showToast('Tuyển tập này chưa có bài hát hoặc đang ở chế độ riêng tư');
       }
       return;
     } catch (e) {
@@ -268,7 +302,10 @@ function selectTrack(index, autoPlay = false) {
   const tr = currentTrack();
   if (AppState.spotifyActive && tr && tr.uri && autoPlay) {
     const uris = AppState.tracks.map(x => x.uri).filter(Boolean);
-    SpotifyClient.playUris(uris, AppState.idx, SpotifyClient.getWebDeviceId()).catch(() => {});
+    const winStart = Math.max(0, AppState.idx - 10);
+    const winUris = uris.slice(winStart, winStart + 80);
+    const relOffset = Math.max(0, AppState.idx - winStart);
+    SpotifyClient.playUris(winUris, relOffset, SpotifyClient.getWebDeviceId()).catch(() => {});
   }
 
   if (autoPlay) {
@@ -332,35 +369,74 @@ function switchTab(tabName) {
 
   if (AppState.spotifyActive) {
     if (tabName === 'liked') {
-      SpotifyClient.fetchLikedTracks().then(list => {
-        if (list.length) {
-          AppState.tracks = list;
+      if (AppState.likedTracks.length) {
+        AppState.tracks = AppState.likedTracks.slice();
+        renderTrackList();
+      }
+      SpotifyClient.fetchLikedTracks(500, partial => {
+        AppState.likedTracks = partial;
+        if (AppState.tab === 'liked') {
+          AppState.tracks = partial.slice();
           renderTrackList();
+        }
+      }).then(list => {
+        if (list.length) {
+          AppState.likedTracks = list;
+          if (AppState.tab === 'liked') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
+        }
+      }).catch(() => {});
+      return;
+    }
+    if (tabName === 'top') {
+      if (AppState.topTracks.length) {
+        AppState.tracks = AppState.topTracks.slice();
+        renderTrackList();
+      }
+      SpotifyClient.fetchTopTracks().then(list => {
+        if (list.length) {
+          AppState.topTracks = list;
+          if (AppState.tab === 'top') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
         }
       }).catch(() => {});
       return;
     }
     if (tabName === 'recent') {
+      if (AppState.recentTracks.length) {
+        AppState.tracks = AppState.recentTracks.slice();
+        renderTrackList();
+      }
       SpotifyClient.fetchRecentTracks().then(list => {
         if (list.length) {
-          AppState.tracks = list;
-          renderTrackList();
+          AppState.recentTracks = list;
+          if (AppState.tab === 'recent') {
+            AppState.tracks = list;
+            renderTrackList();
+          }
         }
       }).catch(() => {});
       return;
     }
     if (tabName === 'playlists') {
-      SpotifyClient.fetchPlaylists().then(pls => {
+      renderTrackList();
+      SpotifyClient.fetchPlaylists(200).then(pls => {
         if (pls.length) AppState.playlists = pls;
-        renderTrackList();
+        if (AppState.tab === 'playlists') renderTrackList();
       }).catch(() => renderTrackList());
       return;
     }
   }
 
-  // Demo mode tab filtering
+  // Demo mode / fallback tab filtering
   if (tabName === 'liked') {
     AppState.tracks = AppState.allTracks.filter(t => t.liked);
+  } else if (tabName === 'top') {
+    AppState.tracks = AppState.allTracks.slice();
   } else if (tabName === 'recent') {
     AppState.tracks = AppState.allTracks.slice().reverse();
   } else if (tabName === 'search') {
@@ -381,16 +457,20 @@ function syncNavTabs() {
 let searchDebounce = null;
 function filterSearch(q) {
   AppState.searchQuery = q;
+  AppState.searchOffset = 0;
   if (AppState.spotifyActive && q.trim().length >= 2) {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => {
-      SpotifyClient.searchTracks(q).then(res => {
+      SpotifyClient.searchTracks(q, 0).then(res => {
         AppState.tracks = res;
+        AppState.searchOffset = res.length;
+        AppState.searchHasMore = res.length >= 50;
         renderTrackList();
       }).catch(() => {});
-    }, 320);
+    }, 300);
     return;
   }
+  AppState.searchHasMore = false;
   const kw = q.trim().toLowerCase();
   AppState.tracks = !kw
     ? AppState.allTracks.slice()
@@ -398,6 +478,25 @@ function filterSearch(q) {
         t => t.t.toLowerCase().includes(kw) || t.a.toLowerCase().includes(kw) || t.al.toLowerCase().includes(kw)
       );
   renderTrackList();
+}
+
+async function loadMoreSearchResults() {
+  if (!AppState.spotifyActive || !AppState.searchQuery.trim()) return;
+  try {
+    showToast('Đang tải thêm kết quả...');
+    const more = await SpotifyClient.searchTracks(AppState.searchQuery, AppState.searchOffset);
+    if (more.length) {
+      AppState.tracks = AppState.tracks.concat(more);
+      AppState.searchOffset += more.length;
+      AppState.searchHasMore = more.length >= 50;
+      renderTrackList();
+    } else {
+      AppState.searchHasMore = false;
+      renderTrackList();
+    }
+  } catch (e) {
+    showToast('Không thể tải thêm kết quả');
+  }
 }
 
 // Visual Mode Switching
@@ -540,6 +639,137 @@ function closeMobileDrawers() {
   document.querySelectorAll('[data-mob-drawer]').forEach(b => b.classList.remove('on'));
 }
 
+function mergeUniqueTracks(...arrays) {
+  const seen = new Set();
+  const out = [];
+  for (const arr of arrays) {
+    if (!Array.isArray(arr)) continue;
+    for (const tr of arr) {
+      if (!tr) continue;
+      const key = tr.id || tr.uri || `${tr.t}__${tr.a}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(tr);
+      }
+    }
+  }
+  return out;
+}
+
+async function syncFullSpotifyLibrary(showFeedback = false) {
+  if (!AppState.spotifyActive) return;
+  if (showFeedback) showToast('Đang đồng bộ toàn bộ thư viện Spotify...');
+
+  try {
+    const [queueInfo, liked, top, recent, savedAlbums, playlists] = await Promise.all([
+      SpotifyClient.fetchCurrentQueue().catch(() => ({ playback: null, tracks: [] })),
+      SpotifyClient.fetchLikedTracks(500, partial => {
+        AppState.likedTracks = partial;
+        if (AppState.tab === 'liked') {
+          AppState.tracks = partial.slice();
+          renderTrackList();
+        }
+      }).catch(() => []),
+      SpotifyClient.fetchTopTracks().catch(() => []),
+      SpotifyClient.fetchRecentTracks().catch(() => []),
+      SpotifyClient.fetchSavedAlbumTracks().catch(() => []),
+      SpotifyClient.fetchPlaylists(200).catch(() => [])
+    ]);
+
+    if (liked.length) AppState.likedTracks = liked;
+    if (top.length) AppState.topTracks = top;
+    if (recent.length) AppState.recentTracks = recent;
+    if (playlists.length) AppState.playlists = playlists;
+
+    let combined = mergeUniqueTracks(
+      queueInfo.tracks || [],
+      liked,
+      top,
+      recent,
+      savedAlbums
+    );
+
+    // If user stores most of their songs inside Playlists rather than "Liked Songs",
+    // automatically pull tracks from their first 3 playlists so Danh sách phát is rich and complete
+    if (combined.length < 40 && playlists.length > 0) {
+      const topPlaylists = playlists.slice(0, 3);
+      for (const pl of topPlaylists) {
+        try {
+          const plTracks = await SpotifyClient.fetchPlaylistTracks(pl.id, 200);
+          combined = mergeUniqueTracks(combined, plTracks);
+        } catch (e) {}
+      }
+    }
+
+    if (combined.length > 0) {
+      AppState.allTracks = combined;
+      if (AppState.tab === 'queue') {
+        AppState.tracks = combined.slice();
+        selectTrack(0, false);
+      } else {
+        renderTrackList();
+      }
+    }
+
+    // Sync active device and playback state if currently playing on Phone/PC
+    if (queueInfo.playback) {
+      applyRemotePlaybackState(queueInfo.playback);
+    }
+
+    if (showFeedback) {
+      showToast(`Đã đồng bộ ${AppState.allTracks.length} bài hát & ${AppState.playlists.length} tuyển tập`);
+    }
+  } catch (e) {
+    if (showFeedback) showToast('Không thể đồng bộ thư viện Spotify');
+  }
+}
+
+function applyRemotePlaybackState(pb) {
+  if (!pb) return;
+  if (pb.device && pb.device.name) {
+    AppState.activeDeviceName = pb.device.name;
+    document.querySelectorAll('.js-device-name').forEach(s => (s.textContent = pb.device.name));
+  }
+  if (typeof pb.is_playing === 'boolean') {
+    AppState.playing = pb.is_playing;
+    const iconHTML = AppState.playing ? TASK_ICONS.pause : TASK_ICONS.play;
+    document.querySelectorAll('.js-play').forEach(btn => {
+      btn.innerHTML = iconHTML;
+      btn.dataset.state = AppState.playing ? 'playing' : 'paused';
+    });
+  }
+  if (typeof pb.progress_ms === 'number') {
+    AppState.pos = Math.round(pb.progress_ms / 1000);
+  }
+  if (pb.item && pb.item.id) {
+    const mapped = SpotifyClient.mapSpotifyTrack(pb.item);
+    if (mapped) {
+      const existingIdx = AppState.tracks.findIndex(x => x.id === mapped.id);
+      if (existingIdx >= 0) {
+        AppState.idx = existingIdx;
+      } else {
+        AppState.tracks.unshift(mapped);
+        AppState.allTracks = mergeUniqueTracks([mapped], AppState.allTracks);
+        AppState.idx = 0;
+      }
+      renderMetadata();
+      renderTrackList();
+    }
+  }
+}
+
+let remotePollTimer = null;
+function startRemotePlaybackPolling() {
+  if (remotePollTimer) clearInterval(remotePollTimer);
+  remotePollTimer = setInterval(async () => {
+    if (!AppState.spotifyActive) return;
+    const pb = await SpotifyClient.fetchCurrentPlayback();
+    if (pb && pb.item) {
+      applyRemotePlaybackState(pb);
+    }
+  }, 4000);
+}
+
 // Connect live Spotify account if token exists
 async function initSpotifySession() {
   try {
@@ -559,12 +789,8 @@ async function initSpotifySession() {
       });
       showToast('Đã kết nối Spotify: ' + profile.display_name);
 
-      const liked = await SpotifyClient.fetchLikedTracks();
-      if (liked.length) {
-        AppState.allTracks = liked;
-        AppState.tracks = liked.slice();
-        selectTrack(0, false);
-      }
+      await syncFullSpotifyLibrary(true);
+      startRemotePlaybackPolling();
 
       SpotifyClient.initWebPlaybackSDK(
         st => {
@@ -764,6 +990,15 @@ function initApp() {
   document.querySelectorAll('.js-close-devices').forEach(b => (b.onclick = closeDeviceModal));
   document.querySelectorAll('.js-open-install').forEach(b => (b.onclick = openInstallModal));
   document.querySelectorAll('.js-close-install').forEach(b => (b.onclick = closeInstallModal));
+  document.querySelectorAll('.js-sync-library').forEach(b => {
+    b.onclick = () => {
+      if (AppState.spotifyActive) {
+        syncFullSpotifyLibrary(true);
+      } else {
+        openSpotifyModal();
+      }
+    };
+  });
 
   const btnPwaInstall = document.getElementById('btn-pwa-install');
   if (btnPwaInstall) {

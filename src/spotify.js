@@ -15,6 +15,7 @@ const SpotifyClient = (function () {
     'user-read-currently-playing',
     'user-library-read',
     'user-read-recently-played',
+    'user-top-read',
     'playlist-read-private',
     'playlist-read-collaborative'
   ].join(' ');
@@ -228,66 +229,177 @@ const SpotifyClient = (function () {
     });
   }
 
-  function mapSpotifyTrack(item) {
+  function mapSpotifyTrack(item, fallbackAlbum = null) {
     const t = item && item.track ? item.track : item;
-    if (!t || !t.id) return null;
-    const img = (t.album && t.album.images && t.album.images[0] && t.album.images[0].url) || '';
+    if (!t || (!t.id && !t.uri)) return null;
+    const albumObj = t.album || fallbackAlbum || {};
+    const img =
+      (albumObj.images && albumObj.images[0] && albumObj.images[0].url) ||
+      (t.images && t.images[0] && t.images[0].url) ||
+      '';
     return {
-      id: t.id,
-      uri: t.uri,
+      id: t.id || t.uri,
+      uri: t.uri || (t.id ? `spotify:track:${t.id}` : ''),
       t: t.name || 'Không rõ tên',
-      a: (t.artists || []).map(x => x.name).join(', ') || 'Nghệ sĩ',
-      al: (t.album && t.album.name) || 'Album',
+      a: (t.artists || []).map(x => x.name).filter(Boolean).join(', ') || 'Nghệ sĩ',
+      al: albumObj.name || 'Spotify',
       d: Math.max(1, Math.round((t.duration_ms || 180000) / 1000)),
       cover: img,
       c: [217, 130, 43],
-      bpm: 116
+      bpm: 116,
+      liked: true
     };
+  }
+
+  function dedupeTracks(list) {
+    const seen = new Set();
+    const out = [];
+    for (const tr of list) {
+      if (!tr) continue;
+      const key = tr.id || tr.uri || `${tr.t}__${tr.a}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(tr);
+      }
+    }
+    return out;
   }
 
   async function fetchProfile() {
     return api('/me');
   }
 
-  async function fetchLikedTracks() {
-    const data = await api('/me/tracks?limit=30');
-    return ((data && data.items) || []).map(mapSpotifyTrack).filter(Boolean);
+  // Auto-paginate Liked Songs up to maxItems (50 per request)
+  async function fetchLikedTracks(maxItems = 500, onProgress = null) {
+    const all = [];
+    let offset = 0;
+    const limit = 50;
+    while (offset < maxItems) {
+      const data = await api(`/me/tracks?limit=${limit}&offset=${offset}`);
+      const items = (data && data.items) || [];
+      if (!items.length) break;
+      const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
+      all.push(...mapped);
+      if (onProgress) onProgress(all.slice());
+      if (!data.next || items.length < limit) break;
+      offset += limit;
+    }
+    return dedupeTracks(all);
+  }
+
+  // Fetch user's Top Tracks (short_term + medium_term)
+  async function fetchTopTracks() {
+    const [shortData, medData] = await Promise.all([
+      api('/me/top/tracks?limit=50&time_range=short_term').catch(() => null),
+      api('/me/top/tracks?limit=50&time_range=medium_term').catch(() => null)
+    ]);
+    const list = [
+      ...(((shortData && shortData.items) || []).map(it => mapSpotifyTrack(it))),
+      ...(((medData && medData.items) || []).map(it => mapSpotifyTrack(it)))
+    ].filter(Boolean);
+    return dedupeTracks(list);
+  }
+
+  // Fetch tracks from user's Saved Albums
+  async function fetchSavedAlbumTracks() {
+    const data = await api('/me/albums?limit=30').catch(() => null);
+    const items = (data && data.items) || [];
+    const list = [];
+    for (const it of items) {
+      const alb = it && it.album;
+      if (!alb || !alb.tracks || !alb.tracks.items) continue;
+      for (const tr of alb.tracks.items) {
+        const mapped = mapSpotifyTrack(tr, alb);
+        if (mapped) list.push(mapped);
+      }
+    }
+    return dedupeTracks(list);
   }
 
   async function fetchRecentTracks() {
-    const data = await api('/me/player/recently-played?limit=30');
-    const seen = new Set();
+    const data = await api('/me/player/recently-played?limit=50');
+    const list = ((data && data.items) || []).map(it => mapSpotifyTrack(it.track)).filter(Boolean);
+    return dedupeTracks(list);
+  }
+
+  // Fetch currently playing track + active Spotify playback queue
+  async function fetchCurrentQueue() {
+    const [curPlayback, queueData] = await Promise.all([
+      api('/me/player').catch(() => null),
+      api('/me/player/queue').catch(() => null)
+    ]);
     const list = [];
-    ((data && data.items) || []).forEach(it => {
-      const m = mapSpotifyTrack(it.track);
-      if (m && !seen.has(m.id)) {
-        seen.add(m.id);
-        list.push(m);
+    if (curPlayback && curPlayback.item) {
+      const cur = mapSpotifyTrack(curPlayback.item);
+      if (cur) list.push(cur);
+    }
+    if (queueData && queueData.currently_playing) {
+      const curQ = mapSpotifyTrack(queueData.currently_playing);
+      if (curQ) list.push(curQ);
+    }
+    if (queueData && Array.isArray(queueData.queue)) {
+      for (const qItem of queueData.queue) {
+        const m = mapSpotifyTrack(qItem);
+        if (m) list.push(m);
       }
-    });
-    return list;
+    }
+    return {
+      playback: curPlayback,
+      tracks: dedupeTracks(list)
+    };
   }
 
-  async function fetchPlaylists() {
-    const data = await api('/me/playlists?limit=20');
-    return ((data && data.items) || []).map(p => ({
-      id: p.id,
-      name: p.name,
-      count: (p.tracks && p.tracks.total) || 0,
-      cover: (p.images && p.images[0] && p.images[0].url) || ''
-    }));
+  async function fetchCurrentPlayback() {
+    return api('/me/player').catch(() => null);
   }
 
-  async function fetchPlaylistTracks(playlistId) {
-    const data = await api(`/playlists/${playlistId}/tracks?limit=40`);
-    return ((data && data.items) || []).map(mapSpotifyTrack).filter(Boolean);
+  // Auto-paginate all user playlists
+  async function fetchPlaylists(maxItems = 200) {
+    const all = [];
+    let offset = 0;
+    const limit = 50;
+    while (offset < maxItems) {
+      const data = await api(`/me/playlists?limit=${limit}&offset=${offset}`);
+      const items = (data && data.items) || [];
+      if (!items.length) break;
+      for (const p of items) {
+        if (!p || !p.id) continue;
+        all.push({
+          id: p.id,
+          name: p.name || 'Tuyển tập',
+          count: (p.tracks && p.tracks.total) || (p.items && p.items.total) || 0,
+          cover: (p.images && p.images[0] && p.images[0].url) || ''
+        });
+      }
+      if (!data.next || items.length < limit) break;
+      offset += limit;
+    }
+    return all;
   }
 
-  async function searchTracks(query) {
+  // Auto-paginate all tracks in a playlist (100 per page)
+  async function fetchPlaylistTracks(playlistId, maxItems = 1000, onProgress = null) {
+    const all = [];
+    let offset = 0;
+    const limit = 100;
+    while (offset < maxItems) {
+      const data = await api(`/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`);
+      const items = (data && data.items) || [];
+      if (!items.length) break;
+      const mapped = items.map(it => mapSpotifyTrack(it)).filter(Boolean);
+      all.push(...mapped);
+      if (onProgress) onProgress(all.slice());
+      if (!data.next || items.length < limit) break;
+      offset += limit;
+    }
+    return dedupeTracks(all);
+  }
+
+  async function searchTracks(query, offset = 0) {
     if (!query.trim()) return [];
     const q = encodeURIComponent(query.trim());
-    const data = await api(`/search?type=track&limit=25&q=${q}`);
-    return ((data && data.tracks && data.tracks.items) || []).map(mapSpotifyTrack).filter(Boolean);
+    const data = await api(`/search?type=track&limit=50&offset=${offset}&q=${q}`);
+    return ((data && data.tracks && data.tracks.items) || []).map(it => mapSpotifyTrack(it)).filter(Boolean);
   }
 
   async function fetchDevices() {
@@ -380,10 +492,15 @@ const SpotifyClient = (function () {
     extractCoverColor,
     fetchProfile,
     fetchLikedTracks,
+    fetchTopTracks,
+    fetchSavedAlbumTracks,
     fetchRecentTracks,
+    fetchCurrentQueue,
+    fetchCurrentPlayback,
     fetchPlaylists,
     fetchPlaylistTracks,
     searchTracks,
+    mapSpotifyTrack,
     fetchDevices,
     transferPlayback,
     playUris,
