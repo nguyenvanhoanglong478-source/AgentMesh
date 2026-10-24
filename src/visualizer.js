@@ -204,17 +204,18 @@ const Visualizer3D = (function () {
     const punch = bands.punch || 0;
     const bins = bands.bins;
 
-    // Clear with deep warm ink + audio-reactive ambient core glow
-    ctx.fillStyle = "#0E0D0B";
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    // Clear with deep warm ink / porcelain paper + audio-reactive ambient core glow
+    ctx.fillStyle = isLight ? "#F7F5F0" : "#0E0D0B";
     ctx.fillRect(0, 0, w, h);
 
     const glowR = scale * (1.25 + bands.bass * 0.65 + punch * 0.55);
     const grad = ctx.createRadialGradient(cx, cy, scale * 0.04, cx, cy, glowR);
-    const glowAlpha = Math.min(0.42, 0.08 + bands.energy * 0.22 + punch * 0.22);
+    const glowAlpha = Math.min(isLight ? 0.26 : 0.42, (isLight ? 0.05 : 0.08) + bands.energy * 0.22 + punch * 0.22);
     const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
     grad.addColorStop(0, `rgba(${ar}, ${ag}, ${ab}, ${glowAlpha.toFixed(3)})`);
     grad.addColorStop(0.55, `rgba(${ar}, ${ag}, ${ab}, ${(glowAlpha * 0.22).toFixed(3)})`);
-    grad.addColorStop(1, "rgba(14, 13, 11, 0)");
+    grad.addColorStop(1, isLight ? "rgba(247, 245, 240, 0)" : "rgba(14, 13, 11, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
@@ -276,8 +277,20 @@ const Visualizer3D = (function () {
     }
 
     // 9 Pre-computed draw styles: Back-to-front order (0 to 7) + Halo (8)
-    const baseR = 236, baseG = 229, baseB = 216;
-    const styles = [
+    const baseR = isLight ? 34 : 236;
+    const baseG = isLight ? 30 : 229;
+    const baseB = isLight ? 26 : 216;
+    const styles = isLight ? [
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.26)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.36)`,
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.50)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.60)`,
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.74)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.82)`,
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.94)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.98)`,
+      `rgba(${ar}, ${ag}, ${ab}, ${(0.22 + punch * 0.26).toFixed(3)})`
+    ] : [
       `rgba(${baseR}, ${baseG}, ${baseB}, 0.22)`,
       `rgba(${ar}, ${ag}, ${ab}, 0.28)`,
       `rgba(${baseR}, ${baseG}, ${baseB}, 0.46)`,
@@ -357,7 +370,8 @@ const Visualizer3D = (function () {
     const st = (bot - top) / RIDGE_ROWS;
     const maxAmp = h * (isMobile ? 0.19 : 0.22);
 
-    ctx.fillStyle = '#0E0D0B';
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    ctx.fillStyle = isLight ? "#F7F5F0" : "#0E0D0B";
     ctx.fillRect(0, 0, w, h);
 
     const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
@@ -406,7 +420,8 @@ const Visualizer3D = (function () {
         ctx.strokeStyle = `rgba(${ar}, ${ag}, ${ab}, 0.78)`;
         ctx.lineWidth = 1.6 * dpr;
       } else {
-        ctx.strokeStyle = `rgba(236, 229, 216, ${(0.15 + 0.62 * depthFactor).toFixed(3)})`;
+        const lineAlpha = (isLight ? (0.22 + 0.65 * depthFactor) : (0.15 + 0.62 * depthFactor)).toFixed(3);
+        ctx.strokeStyle = isLight ? `rgba(34, 30, 26, ${lineAlpha})` : `rgba(236, 229, 216, ${lineAlpha})`;
         ctx.lineWidth = 1.05 * dpr;
       }
       ctx.stroke();
@@ -423,7 +438,8 @@ const Visualizer3D = (function () {
     const bins = bands.bins;
     const punch = bands.punch || 0;
 
-    ctx.fillStyle = "#0E0D0B";
+    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    ctx.fillStyle = isLight ? "#F7F5F0" : "#0E0D0B";
     ctx.fillRect(0, 0, w, h);
 
     const ar = Math.round(acc[0]), ag = Math.round(acc[1]), ab = Math.round(acc[2]);
@@ -471,8 +487,15 @@ const Visualizer3D = (function () {
       vortexBuckets[bucketIdx].push(it);
     }
 
-    const baseR = 236, baseG = 229, baseB = 216;
-    const styles = [
+    const baseR = isLight ? 34 : 236;
+    const baseG = isLight ? 30 : 229;
+    const baseB = isLight ? 26 : 216;
+    const styles = isLight ? [
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.38)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.48)`,
+      `rgba(${baseR}, ${baseG}, ${baseB}, 0.78)`,
+      `rgba(${ar}, ${ag}, ${ab}, 0.92)`
+    ] : [
       `rgba(${baseR}, ${baseG}, ${baseB}, 0.32)`,
       `rgba(${ar}, ${ag}, ${ab}, 0.42)`,
       `rgba(${baseR}, ${baseG}, ${baseB}, 0.72)`,

@@ -6,10 +6,42 @@
   --muted: #4E4942;
   --line: rgba(236, 229, 216, 0.13);
   --line-strong: rgba(236, 229, 216, 0.26);
+  --btn-bg: rgba(236, 229, 216, 0.03);
+  --btn-bg-hover: rgba(236, 229, 216, 0.08);
+  --glass-bg: rgba(14, 13, 11, 0.86);
+  --glass-bg-trans: rgba(14, 13, 11, 0.90);
+  --modal-overlay: rgba(8, 7, 6, 0.80);
+  --stage-vignette-start: rgba(14, 13, 11, 0.18);
+  --stage-vignette-mid: rgba(14, 13, 11, 0.58);
+  --stage-vignette-end: rgba(14, 13, 11, 0.88);
+  --ambient-primary-op: 0.88;
+  --ambient-sec-op: 0.72;
+  --card-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
   --acc: #D9822B;
   --acc-rgb: 217, 130, 43;
   --f-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --f-mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+
+html[data-theme="light"] {
+  --ink: #F7F5F0;
+  --ink-elev: #FFFFFF;
+  --paper: #161412;
+  --dim: #645E55;
+  --muted: #9E9689;
+  --line: rgba(22, 20, 18, 0.10);
+  --line-strong: rgba(22, 20, 18, 0.22);
+  --btn-bg: rgba(22, 20, 18, 0.04);
+  --btn-bg-hover: rgba(22, 20, 18, 0.08);
+  --glass-bg: rgba(247, 245, 240, 0.88);
+  --glass-bg-trans: rgba(247, 245, 240, 0.92);
+  --modal-overlay: rgba(22, 20, 18, 0.45);
+  --stage-vignette-start: rgba(247, 245, 240, 0.15);
+  --stage-vignette-mid: rgba(247, 245, 240, 0.45);
+  --stage-vignette-end: rgba(247, 245, 240, 0.85);
+  --ambient-primary-op: 0.35;
+  --ambient-sec-op: 0.22;
+  --card-shadow: 0 20px 48px rgba(30, 26, 22, 0.12);
 }
 
 * {
@@ -96,7 +128,7 @@ html, body {
 
 /* Fixed Action & Navigation Buttons (Never deform, wrap, or shift size) */
 .word {
-  background: rgba(236, 229, 216, 0.03);
+  background: var(--btn-bg, rgba(236, 229, 216, 0.03));
   border: 1px solid var(--line);
   border-radius: 0;
   color: var(--paper);
@@ -138,7 +170,7 @@ html, body {
 }
 
 .icon-btn {
-  background: rgba(236, 229, 216, 0.03);
+  background: var(--btn-bg, rgba(236, 229, 216, 0.03));
   border: 1px solid var(--line);
   border-radius: 0;
   color: var(--dim);
@@ -172,7 +204,7 @@ html, body {
 
 /* Geometric Transport Buttons — 100% Square Layout */
 .ctl-btn {
-  background: rgba(236, 229, 216, 0.02);
+  background: var(--btn-bg, rgba(236, 229, 216, 0.02));
   border: 1px solid var(--line);
   color: var(--paper);
   cursor: pointer;
@@ -241,7 +273,7 @@ html, body {
   height: 52px;
   border-bottom: 1px solid var(--line);
   z-index: 15;
-  background: rgba(14, 13, 11, 0.86);
+  background: var(--glass-bg, rgba(14, 13, 11, 0.86));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   gap: 12px;
@@ -300,7 +332,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: rgba(14, 13, 11, 0.86);
+  background: var(--glass-bg, rgba(14, 13, 11, 0.86));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   z-index: 5;
@@ -361,7 +393,7 @@ html, body {
 .search-input {
   width: 100%;
   height: 32px;
-  background: rgba(236, 229, 216, 0.03);
+  background: var(--btn-bg, rgba(236, 229, 216, 0.03));
   border: 1px solid var(--line-strong);
   border-radius: 0;
   color: var(--paper);
@@ -469,8 +501,8 @@ html, body {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 44%, transparent 38%, rgba(14, 13, 11, 0.58) 100%),
-    linear-gradient(180deg, rgba(14, 13, 11, 0.18) 0%, transparent 22%, transparent 62%, rgba(14, 13, 11, 0.88) 100%);
+    radial-gradient(circle at 50% 44%, transparent 38%, var(--stage-vignette-mid, rgba(14, 13, 11, 0.58)) 100%),
+    linear-gradient(180deg, var(--stage-vignette-start, rgba(14, 13, 11, 0.18)) 0%, transparent 22%, transparent 62%, var(--stage-vignette-end, rgba(14, 13, 11, 0.88)) 100%);
   z-index: 1;
 }
 
@@ -531,7 +563,7 @@ html, body {
   gap: 18px;
   overflow-y: auto;
   scrollbar-width: none;
-  background: rgba(14, 13, 11, 0.86);
+  background: var(--glass-bg, rgba(14, 13, 11, 0.86));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   z-index: 5;
@@ -630,7 +662,7 @@ html, body {
   display: grid;
   grid-template-columns: 280px 1fr 260px;
   align-items: center;
-  background: rgba(14, 13, 11, 0.90);
+  background: var(--glass-bg-trans, rgba(14, 13, 11, 0.90));
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   z-index: 10;
@@ -752,7 +784,7 @@ html, body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 7, 6, 0.80);
+  background: var(--modal-overlay, rgba(8, 7, 6, 0.80));
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
