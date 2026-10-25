@@ -1,154 +1,62 @@
-# OpenMusic — Trình Phát Nhạc Web Mở Hi-Fi & Visualizer 3D Quỹ Đạo Sóng Âm
+# AgentMesh // AI Agents Swarm Visualizer
 
-[![Version](https://img.shields.io/badge/version-2.0.0-emerald.svg)](https://github.com/nguyenvanhoanglong478-source/OpenMusic)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Pure%20Vanilla)-success.svg)](#)
-[![Web Audio API](https://img.shields.io/badge/Audio-Web%20Audio%20API%20Hi--Fi-purple.svg)](#)
-[![PWA Ready](https://img.shields.io/badge/PWA-Ready%20Offline-orange.svg)](#)
-[![Design](https://img.shields.io/badge/Design-100%25%20Square%20Hi--Fi-lightgrey.svg)](#)
-
-**OpenMusic** là ứng dụng web phát nhạc tương tác thời gian thực thế hệ mới, kết hợp giữa **Kho nhạc Web Mở toàn cầu (100M+ bài hát)**, **Trình phát tệp âm thanh nội bộ Hi-Fi** và **Visualizer 3D Lăng kính Quỹ đạo (Kinetic Orbital Prism)** siêu nhẹ. Ứng dụng mang phong cách công nghiệp tối giản (Industrial Hi-Fi), giao diện nút vuông 100%, hỗ trợ cả chế độ Sáng & Tối và tương thích mượt mà trên cả máy tính lẫn điện thoại di động.
+Trình trực quan hóa và mô phỏng tương tác đa tác nhân AI (Multi-Agent Swarm Simulation) với phong cách thiết kế công nghiệp tối giản (Industrial Brutalism), 100% góc vuông (`border-radius: 0px`), telemetry độ chính xác cao và hỗ trợ cổng kiểm duyệt của con người (Human-in-the-Loop Gate).
 
 ---
 
-## 🌐 Trải Nghiệm Trực Tiếp (Live Demo)
+## Tính Năng Cốt Lõi
 
-Mở ngay trên trình duyệt mà **không cần cài đặt, không cần tài khoản, hoàn toàn miễn phí**:
+### 1. Canvas Sân Khấu Mạng Lưới Tác Nhân (Agent Network Canvas)
+- **Mô phỏng trực quan**: Thể hiện các Agent dưới dạng các nút hình vuông công nghiệp với màu sắc vai trò đặc trưng (Orchestrator, Worker, Critic, Tool Sandbox).
+- **Trạng thái sống động**: Nhịp xung phát sáng (Thinking Halo) khi Agent đang tư duy/gọi LLM, vòng sáng công cụ khi gọi API, và trạng thái hoàn thành.
+- **Dòng thông điệp hạt (Particle Flow)**: Các hạt dữ liệu di chuyển dọc theo các đường cong kết nối hướng, trực quan hóa luồng trao đổi thông điệp và lời gọi subagent.
+- **Tương tác**: Hỗ trợ kéo thả nút (Node Dragging), thu phóng (Zoom), lia bản đồ (Pan), và click để chọn Agent soi chiếu.
 
-👉 **[https://nguyenvanhoanglong478-source.github.io/OpenMusic/](https://nguyenvanhoanglong478-source.github.io/OpenMusic/)**
+### 2. Dòng Sự Kiện Thời Gian Thực (Live Execution Event Stream)
+- Khung bên trái hiển thị toàn bộ luồng sự kiện: `AGENT_SPAWN`, `LLM_PROMPT`, `THINKING_STREAM`, `TOOL_CALL`, `TOOL_RESPONSE`, `SUBAGENT_MESSAGE`, `APPROVAL`.
+- Hỗ trợ thanh kéo resizer tùy biến độ rộng (double-click để reset về mặc định 380px).
+- Hỗ trợ lọc tìm kiếm nhanh theo Agent, Tool, hoặc nội dung log.
 
-*(Tương thích chuẩn mực với Chrome, Safari, Edge, Firefox trên Windows, macOS, Linux, iOS và Android).*
+### 3. Khung Soi Chiếu Chuyên Sâu (Agent Inspector & Telemetry)
+- Thông tin chi tiết: Tên, Vai trò, Mô hình LLM (`Gemini 2.5 Pro`, `Claude 3.7 Sonnet`, `DeepSeek R1`, `GPT-4o`).
+- **Thước đo Context Window Gauge**: Trực quan hóa số token đầu vào (Prompt Tokens) và đầu ra (Completion Tokens) so với giới hạn ngữ cảnh 128k.
+- **Danh bạ Công cụ (Tool Registry)**: Danh sách các công cụ Agent được cấp quyền sử dụng.
+- **Bộ nhớ làm việc (Scratchpad)** và **Chuỗi suy nghĩ gần nhất (Chain of Thought)**.
 
----
+### 4. Bốn Kịch Bản Mô Phỏng Thực Tế (Simulation Scenarios)
+1. **Phần mềm Đa tác nhân (Hierarchical Swarm)**: Lead Orchestrator phân rã bài toán -> Codebase Explorer rà soát AST -> Feature Architect viết code -> Unit Test Subagent chạy test -> Security QA Gate kiểm duyệt.
+2. **Nghiên cứu & Đối chiếu Đa nguồn (Deep Research)**: Research Director định hướng -> 3 Agent phân tán cào arXiv, Web, GitHub -> Fact-Check Synthesizer phản biện và tổng hợp.
+3. **Ứng phó Sự cố Tự động (DevOps Triage)**: Báo động 503 -> Điều tra log -> Phân tích nguyên nhân gốc -> Tạo bản vá nóng -> Kích hoạt Cổng duyệt con người trước khi deploy.
+4. **Hộp Cát Tùy Biến (Custom Sandbox)**: Tự do nạp nhiệm vụ mới cho swarm hoặc kích hoạt các cổng can thiệp.
 
-## 🚀 Điểm Nhấn Kiến Trúc Lai (Hybrid Architecture v2.5)
-
-OpenMusic được kiến trúc theo mô hình **Lai (Hybrid Audio Engine)** thông minh, linh hoạt đáp ứng mọi nhu cầu nghe nhạc:
-- **Mặc định Tự do (Free Web Mode)**: Mở là phát ngay lập tức (0ms latency), không cần đăng nhập, không quảng cáo, truy cập kho nhạc 100M+ bài hát toàn cầu, tự động phát lặp liên tục và tải tệp nhạc từ máy tính/điện thoại.
-- **Tùy chọn Kết nối Spotify (Spotify Connect & Web Playback SDK)**: Dành cho người dùng muốn nghe bài hát bản quyền 100% nguyên vẹn với chất lượng Hi-Fi 320kbps, đồng bộ danh mục Yêu thích (lên tới 10.000 bài) và điều khiển phát nhạc đa thiết bị (Spotify Connect).
-- **Bảo mật Tuyệt đối (Zero-Retention PKCE)**: Kết nối Spotify theo chuẩn OAuth 2.0 PKCE + Anti-CSRF, phiên làm việc chỉ lưu tạm trong bộ nhớ RAM, tuyệt đối không ghi mật khẩu hay mã truy cập vào ổ đĩa.
-- **Siêu tiết kiệm tài nguyên**: Visualizer 3D duy nhất được thiết kế để chỉ tiêu thụ `<0.28ms CPU/frame`, duy trì tốc độ khung hình 120–144 FPS mượt mà ngay cả trên thiết bị di động tầm trung.
-
----
-
-## 🎶 Tính Năng Trọng Tâm
-
-### 1. 🌐 Kho Nhạc Web Mở Toàn Cầu (100M+ Catalog)
-- **Truy cập không giới hạn**: Tìm kiếm tức thì hơn 100 triệu bài hát, nghệ sĩ, album quốc tế và Việt Nam (Sơn Tùng M-TP, Đen Vâu, Vũ, The Weeknd, Taylor Swift, Billie Eilish, v.v.).
-- **Bìa Album độ nét cao**: Tự động trích xuất ảnh bìa HD (600x600) và phân tích bảng màu chủ đạo (Color Palette Extraction) trực tiếp bằng Canvas 2D.
-- **Tuyển tập Tuyển chọn Sẵn (Curated Playlists)**:
-  - 🔥 *V-Pop Thịnh Hành*
-  - 🌟 *The Weeknd: Tuyển Tập Hit*
-  - 🌍 *Top Hits Toàn Cầu*
-  - ☕ *Lofi & Acoustic Chill*
-  - ⚡ *Electronic & EDM Remix*
-
-### 2. 📁 Trình Phát Tệp Âm Thanh Nội Bộ (Local Hi-Fi Engine)
-- Kéo thả hoặc mở trực tiếp các tệp nhạc có sẵn từ điện thoại và máy tính: `.mp3`, `.flac`, `.wav`, `.m4a`, `.ogg`.
-- **100% Client-side**: Toàn bộ tệp âm thanh được giải mã cục bộ qua `AudioContext` trong bộ nhớ RAM, tuyệt đối không gửi lên máy chủ bên ngoài.
-
-### 3. 🌌 Unified 3D Kinetic Orbital Prism (Lăng Kính Quỹ Đạo Sóng Âm)
-- **Hiệu ứng 3D duy nhất & đồng nhất**: Tối ưu hóa đặc biệt dùng chung cho cả Mobile và Desktop.
-- **Cấu trúc thị giác đa tầng**:
-  - Khung dây khối lập phương 3D xoay không gian đa chiều (Wireframe Hypercube).
-  - Lõi hạt phát quang hạt nhân (Inner Radiant Core) co giãn theo xung lực âm lượng.
-  - Vòng hào quang quỹ đạo kép (Dual Orbital Rings) dập nảy nhịp nhàng theo cao độ giai điệu.
-- **Phản ứng âm thanh trực tiếp (Audio-Reactive)**: Tích hợp cảm biến nhịp trống thời gian thực (Kick/Sub-bass Transient Detection), tạo độ nảy chuyển động đồng bộ tuyệt đối với bài hát.
-- **Điều khiển góc nhìn tự do**: Chạm vuốt xoay 360° trên màn hình cảm ứng hoặc kéo chuột trên máy tính.
-
-### 4. 📊 Bộ Phân Tích Phổ 7 Dải Âm Học (7-Band Acoustic Analyzer)
-Hệ thống phân tách năng lượng âm thanh qua 7 dải tần số chuyên nghiệp:
-- 🔊 **Sub** (< 60 Hz): Năng lượng siêu trầm, kích hoạt nhịp nảy trung tâm.
-- 🥁 **Bass** (60 – 250 Hz): Lực đánh của trống kick và âm bassline.
-- 🎸 **Low-Mid** (250 – 500 Hz): Độ dày của bộ gõ và hợp âm thấp.
-- 🎤 **Mid** (500 Hz – 2 kHz): Dải tần chính của giọng hát (Vocal) và nhạc cụ chính.
-- 🎺 **High-Mid** (2k – 4 kHz): Độ trong trẻo và chi tiết giai điệu.
-- 🔔 **Treble** (4k – 8 kHz): Tiếng chũm chọe (Hi-hats, Cymbals) và âm sắc cao.
-- 💨 **Air** (> 8 kHz): Không gian và độ mở thoáng đãng của bản phối.
-
-### 5. 💚 Quản Lý Playlist & Mục Yêu Thích Chuẩn Spotify
-- **Tạo & Quản lý Playlist cá nhân**: Tạo danh sách phát tùy biến, thêm/xóa bài hát dễ dàng.
-- **Mục "Bài Hát Yêu Thích" (Liked Songs)**: Giao diện Spotify Hero Header với hiệu ứng gradient đổi màu động theo bìa bài hát.
-- **Bảng danh sách chuyên nghiệp**: Hiển thị số thứ tự (#), tên bài hát, nghệ sĩ, thời lượng, nút Thả tim tức thì và nút Thêm vào Playlist.
-
-### 6. ⏹️ Triết Lý Thiết Kế 100% Nút Vuông (Industrial Hi-Fi Layout)
-- **Hình học vuông vức (Border-radius: 0px)**: Tất cả nút bấm, thanh điều khiển, ảnh đại diện, danh mục đều tuân theo chuẩn hình khối sắc nét, mạnh mẽ, gợi nhớ đến những cỗ máy nghe nhạc Hi-Fi cổ điển.
-- **Thanh âm lượng dưới đáy trực quan**: Bỏ thanh âm lượng lớn bên hông, đưa về thanh trượt ngang tinh gọn ở thanh điều khiển chân trang, đồng bộ trên mọi kích cỡ màn hình.
-
-### 7. 🌓 Hai Chế Độ Giao Diện: Sáng & Tối (Dual Theme)
-- **Tối (Dark Void Hi-Fi)**: Tông màu đen than chì `#0a0b0e` sâu thẳm, tối ưu hiển thị sân khấu 3D phát quang và tiết kiệm pin OLED.
-- **Sáng (Light Porcelain Wabi-Sabi)**: Tông màu trắng sứ `#f8f9fa` phong cách giấy thủ công thanh lịch, độ tương phản cao, dịu mắt khi sử dụng ban ngày.
-- **Typography thuần khiết**: Nút chuyển đổi nhanh bằng chữ `Sáng` / `Tối` tối giản, không gây rối mắt.
-
-### 8. 💡 Dynamic Ambient Light (Ánh Sáng Môi Trường)
-- Tự động lấy dải màu nổi bật từ ảnh bìa bài hát đang phát và tạo hiệu ứng hào quang lan tỏa dịu nhẹ phía sau sân khấu 3D, tạo chiều sâu thị giác đắm chìm.
+### 5. Cổng Kiểm Duyệt An Toàn (Human-in-the-Loop Approval Gate)
+- Cho phép mô phỏng tạm dừng tự động khi tác nhân yêu cầu lệnh can thiệp nhạy cảm (như deploy production, xóa file hệ thống).
+- Người quản trị có quyền **Chấp thuận (Approve)** hoặc **Từ chối (Reject)** trước khi swarm tiếp tục.
 
 ---
 
-## ⌨️ Phím Tắt Điều Khiển (Keyboard Shortcuts)
+## Kiến Trúc Công Nghệ
 
-| Phím | Chức năng |
-| :--- | :--- |
-| `Space` | Phát / Tạm dừng (Play / Pause) |
-| `J` | Lùi lại 5 giây |
-| `L` | Tua tới 5 giây |
-| `[` | Chuyển về bài hát trước |
-| `]` | Chuyển sang bài hát tiếp theo |
-| `M` | Bật / Tắt tiếng (Mute / Unmute) |
-| `F` | Bật / Tắt toàn màn hình (Fullscreen Stage) |
+- **Zero-Dependency**: 100% thuần HTML5, Canvas 2D, Modern CSS3 và ES6 Modules. Không cần Node.js, không cần bundling/transpilation.
+- **PWA Ready**: Hỗ trợ Service Worker Cache (`sw.js`) và `manifest.webmanifest` để chạy offline và cài đặt dạng ứng dụng máy tính/điện thoại.
+- **Tương thích toàn diện**: Chạy mượt mà trên Desktop và Responsive Mobile Drawer.
 
 ---
 
-## 🔒 Cam Kết Quyền Riêng Tư (Zero Data Retention)
+## Hướng Dẫn Sử Dụng
 
-- **Không Máy Chủ Trung Gian**: Ứng dụng chạy hoàn toàn phía Client (trên trình duyệt của người dùng).
-- **Không Theo Dõi (Zero Tracking)**: Tuyệt đối không thu thập cookie, thông tin cá nhân hay hành vi nghe nhạc.
-- **Lưu trữ Cục bộ**: Danh sách phát và bài hát yêu thích được lưu an toàn trong `localStorage` của trình duyệt trên chính thiết bị của bạn.
-- **An toàn XSS**: Dữ liệu tìm kiếm và siêu dữ liệu âm nhạc đều được khử khuẩn nghiêm ngặt qua các bộ lọc mã hóa trước khi hiển thị trên DOM.
+1. Mở trực tiếp file `index.html` trên trình duyệt bất kỳ (Chrome, Edge, Firefox, Safari).
+2. Bấm nút **Phát** ở thanh điều khiển đáy để khởi chạy mô phỏng.
+3. Bấm vào bất kỳ Agent nào trên Canvas để mở Telemetry Inspector.
+4. Chọn kịch bản từ thanh Topbar để trải nghiệm các mô hình phân rã nhiệm vụ khác nhau.
+5. Bấm **+ Nạp nhiệm vụ** để gửi lệnh mới cho bầy tác nhân.
 
 ---
 
-## 🛠️ Cài Đặt & Chạy Cục Bộ (Local Development)
+## Kiểm Thử Tự Động
 
-OpenMusic được xây dựng bằng công nghệ thuần túy (Vanilla Web Technologies), không yêu cầu `npm install` hay quy trình build phức tạp:
-
-### 1. Tải mã nguồn về máy:
+Chạy bộ kiểm thử tự động toàn diện qua Playwright:
 ```bash
-git clone https://github.com/nguyenvanhoanglong478-source/OpenMusic.git
-cd OpenMusic
+python tests/test_agent_visualizer.py
 ```
-
-### 2. Khởi chạy máy chủ nội bộ:
-Sử dụng bất kỳ máy chủ HTTP đơn giản nào, ví dụ bằng Python:
-```bash
-python -m http.server 8000
-```
-Hoặc dùng tiện ích mở rộng **Live Server** trên VS Code.
-
-### 3. Mở trình duyệt:
-Truy cập: `http://localhost:8000`
-
----
-
-## 📂 Cấu Trúc Thư Mục
-
-```text
-OpenMusic/
-├── index.html              # Toàn bộ mã nguồn cốt lõi (Giao diện, Web Audio, 3D Canvas, Controller)
-├── manifest.webmanifest    # Tệp cấu hình ứng dụng web tiến bộ (PWA)
-├── sw.js                   # Service Worker hỗ trợ cài đặt và bộ nhớ đệm
-├── icon.svg                # Biểu tượng vector logo OpenMusic
-├── icon-192.png            # Icon PWA độ phân giải 192x192
-├── icon-512.png            # Icon PWA độ phân giải 512x512
-├── scripts/                # Các tập lệnh kiểm thử và tối ưu tự động
-├── tests/                  # Bộ kiểm thử tự động (audit giao diện, audio engine, 7 dải tần, visualizer)
-└── README.md               # Tài liệu giới thiệu và hướng dẫn sử dụng
-```
-
----
-
-## 📄 Giấy Phép & Tác Quyền (License)
-
-Dự án được phân phối dưới giấy phép mã nguồn mở **MIT License**. Bạn được toàn quyền sử dụng, sửa đổi và phân phối theo quy định của giấy phép.
-
-*Phát triển với sự tận tâm dành cho cộng đồng yêu âm nhạc và công nghệ web mở.*
+*(Kết quả: 10/10 danh mục kiểm thử đạt chuẩn 100% với 0 lỗi console)*.

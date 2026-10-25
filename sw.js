@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openmusic-pwa-v7';
+const CACHE_NAME = 'agent-mesh-visualizer-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,7 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  // Network-first so updates to index.html take effect immediately; fallback to cache when offline
+  // Network-first so updates take effect immediately, cache fallback
   event.respondWith(
     fetch(event.request)
       .then(resp => {

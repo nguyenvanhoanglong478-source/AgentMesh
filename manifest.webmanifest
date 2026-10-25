@@ -1,32 +1,26 @@
 {
-  "id": "com.openmusic.player",
-  "name": "OpenMusic — Không gian âm thanh 3D",
-  "short_name": "OpenMusic",
-  "description": "Ứng dụng nghe nhạc không gian 3D tương tác thời gian thực trên điện thoại và máy tính với hoạt ảnh Khối đốm hạt phản hồi âm thanh.",
+  "name": "AgentMesh // AI Agents Swarm Visualizer",
+  "short_name": "AgentMesh",
   "start_url": "./index.html",
-  "scope": "./",
   "display": "standalone",
-  "background_color": "#0E0D0B",
-  "theme_color": "#0E0D0B",
-  "orientation": "any",
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "description": "Trình mô phỏng và trực quan hóa tương tác đa tác nhân AI Agents",
   "icons": [
     {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
