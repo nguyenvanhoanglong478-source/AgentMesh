@@ -264,6 +264,7 @@ async def run_comprehensive_audit():
             } catch (e) {
                 results.itunes = { ok: false, error: String(e) };
             }
+            results.hasAudius = typeof window.OpenMusicClient.searchAudius === 'function';
             results.hasSpotifyClient = typeof window.SpotifyClient !== 'undefined';
             return results;
         }""")
@@ -272,10 +273,10 @@ async def run_comprehensive_audit():
         else:
             print(f"  ✓ API Web Mở (iTunes): Hoạt động xuất sắc, trả về {api_results['itunes']['count']} kết quả", flush=True)
 
-        if not api_results.get("hasSpotifyClient"):
-            findings["API"].append({"severity": "HIGH", "issue": "Thiếu mô-đun SpotifyClient cho tùy chọn kết nối Spotify Hybrid"})
+        if not api_results.get("hasAudius"):
+            findings["API"].append({"severity": "HIGH", "issue": "Thiếu hàm searchAudius trong OpenMusicClient"})
         else:
-            print("  ✓ Kiến trúc Hybrid: Đã tích hợp SpotifyClient an toàn với chế độ Web Mở mặc định", flush=True)
+            print("  ✓ Kiến trúc Độc lập: Tích hợp đầy đủ nguồn Khám phá Full (Audius) và Web Mở", flush=True)
 
         # -------------------------------------------------------------
         # DOMAIN 5: TÌM KIẾM (SEARCH) AUDIT
@@ -302,7 +303,7 @@ async def run_comprehensive_audit():
         # DOMAIN 6: THƯ VIỆN & TRẠNG THÁI (LIBRARY & STATE) AUDIT
         # -------------------------------------------------------------
         print("\n>>> [6/8] Đang kiểm tra Thư viện bài hát (Library, Liked, Local Files)...", flush=True)
-        tabs = ["queue", "liked", "top", "playlists", "recent", "search"]
+        tabs = ["queue", "liked", "trending", "playlists", "recent", "search"]
         for tab in tabs:
             await page.locator(f'[data-tab="{tab}"]').click()
             await page.wait_for_timeout(100)
@@ -332,19 +333,15 @@ async def run_comprehensive_audit():
         # -------------------------------------------------------------
         print("\n>>> [7/8] Đang kiểm tra Tính năng Playlist Tự tạo (Spotify Style) & An toàn dữ liệu...", flush=True)
 
-        # 1. Check Spotify Modal exists & square (0px), and Device Modal is completely removed
+        # 1. Check Spotify & Device Modals are completely removed (100% standalone, 0 phone conflict)
         sp_modal_count = await page.locator("#spotify-modal").count()
         dev_modal_count = await page.locator("#device-modal").count()
-        if sp_modal_count == 0:
-            findings["CONNECTION"].append({"severity": "HIGH", "issue": f"Thiếu modal Spotify ({sp_modal_count})"})
+        if sp_modal_count > 0:
+            findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Spotify chưa được loại bỏ hoàn toàn"})
         elif dev_modal_count > 0:
             findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Device chưa được loại bỏ hoàn toàn"})
         else:
-            sp_rad = await page.locator("#spotify-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
-            if sp_rad not in ["0px", "0"]:
-                findings["CONNECTION"].append({"severity": "HIGH", "issue": "Modal Spotify không đạt chuẩn hình vuông (border-radius: 0px)"})
-            else:
-                print("  ✓ Modal Hybrid: Modal Spotify sẵn sàng (chuẩn hình vuông 0px), Device Switcher đã loại bỏ 100%", flush=True)
+            print("  ✓ Kiến trúc Độc lập: Modal Spotify và Device Switcher đã loại bỏ 100% (triệt tiêu xung đột với điện thoại)", flush=True)
 
         # 2. Test Create Playlist Modal
         await page.locator(".js-btn-new-playlist").first.click()

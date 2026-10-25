@@ -57,27 +57,22 @@ with sync_playwright() as p:
     assert "QUỸ ĐẠO LĂNG KÍNH" not in right_text, "Found QUỸ ĐẠO LĂNG KÍNH in right pane, should be removed!"
     print("   Verified: 3D text in Image 3 completely removed from Right Pane!")
 
-    # 5. Verify Spotify Modal Dashboard Link and Copy Button (Image 2)
-    page.locator(".js-open-spotify").first.click()
-    page.wait_for_timeout(300)
-    sp_modal = page.locator("#spotify-modal")
-    assert not sp_modal.is_hidden(), "Spotify modal must be open"
+    # 5. Verify Zero Spotify Footprint (Eliminate phone conflict) & 100% Square Modals
+    sp_modal_count = page.locator("#spotify-modal").count()
+    sp_btn_count = page.locator(".js-open-spotify").count()
+    print(f"5. Spotify Modal count: {sp_modal_count}, Spotify Button count: {sp_btn_count}")
+    assert sp_modal_count == 0, "Spotify modal must be removed"
+    assert sp_btn_count == 0, "Spotify connect button must be removed"
 
-    dashboard_link = page.locator('#spotify-modal a[href="https://developer.spotify.com/dashboard"]')
-    assert dashboard_link.count() > 0, "Dashboard link must be an active anchor tag"
-    print("5. Dashboard link verified:", dashboard_link.get_attribute("href"))
-
-    copy_btn = page.locator("#btn-copy-redirect-uri")
-    assert copy_btn.count() > 0, "Copy button #btn-copy-redirect-uri must exist"
-    # Click copy button
-    copy_btn.click()
+    # Verify Create Playlist modal is present and 100% square
+    page.locator(".js-btn-new-playlist").first.click()
     page.wait_for_timeout(200)
-    btn_text = copy_btn.text_content().strip()
-    print("   Copy button clicked, current text:", btn_text)
-    assert btn_text in ["Đã chép", "Sao chép"], f"Unexpected copy button text: {btn_text}"
-
-    # Close modal
-    page.locator(".js-close-spotify").first.click()
+    cpl_modal = page.locator("#create-playlist-modal")
+    assert not cpl_modal.is_hidden(), "Create Playlist modal should open"
+    cpl_radius = page.locator("#create-playlist-modal .modal-card").evaluate("el => getComputedStyle(el).borderRadius")
+    print("   Create Playlist modal border-radius:", cpl_radius)
+    assert cpl_radius in ["0px", "0"], f"Modal must have 0px border-radius, got: {cpl_radius}"
+    page.locator(".js-close-cpl-modal").first.click()
     page.wait_for_timeout(200)
 
     # 6. Verify Liked Songs Hero Header and Tiles
