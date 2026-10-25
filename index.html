@@ -864,7 +864,7 @@ Task #3: Unit test validation [PENDING]</div>
           <div class="inspector-section">
             <span class="sec-label">Chuỗi suy nghĩ gần nhất (Chain of Thought)</span>
             <div class="sec-box" id="inspect-cot" style="color:var(--accent-amber);">Thinking Process:
-1. Decomposed user request to transform OpenMusic.
+1. Decomposed user request to initialize AgentMesh.
 2. Verified removal of audio playback pipelines.
 3. Delegating Canvas rendering to UI specialist subagent.</div>
           </div>
@@ -976,7 +976,7 @@ Rủi ro: Cao. Yêu cầu phê duyệt từ con người trước khi tiếp t�
           { from: "critic", to: "lead", label: "Phê duyệt hoặc Yêu cầu sửa" }
         ],
         events: [
-          { time: 1.2, agent: "lead", type: "THINK", payload: "Phân tích yêu cầu: Khách hàng muốn biến OpenMusic thành AI Agents Visualizer." },
+          { time: 1.2, agent: "lead", type: "THINK", payload: "Phân tích yêu cầu: Khởi tạo bầy tác nhân AgentMesh để giám sát và trực quan hóa quy trình AI Agents." },
           { time: 3.5, agent: "lead", type: "MESSAGE", target: "explorer", payload: "Yêu cầu Codebase Explorer kiểm tra toàn bộ cây thư mục và mã nguồn hiện tại." },
           { time: 5.0, agent: "explorer", type: "TOOL", tool: "glob_files", payload: "Quét thư mục: Đã tìm thấy 14 files bao gồm index.html, sw.js, tests/." },
           { time: 7.8, agent: "explorer", type: "MESSAGE", target: "coder", payload: "Cung cấp sơ đồ hiện tại: Cần gỡ bỏ AudioEngine và thay bằng Canvas Network Simulation." },
